@@ -108,11 +108,13 @@ const UI = (() => {
     const root = document.documentElement
     const computedStyle = getComputedStyle(root)
 
-    colors.background = computedStyle.getPropertyValue('--color-bg-primary').trim()
-    colors.grid = computedStyle.getPropertyValue('--color-bg-tertiary').trim()
-    colors.active = computedStyle.getPropertyValue('--color-accent').trim()
-    colors.highlight = computedStyle.getPropertyValue('--color-accent-hover').trim()
-    colors.text = computedStyle.getPropertyValue('--color-text-primary').trim()
+    colors.background = computedStyle.getPropertyValue('--color-bg-primary').trim() || '#1a1a1a'
+    colors.grid = computedStyle.getPropertyValue('--color-bg-tertiary').trim() || '#3a3a3a'
+    colors.active = computedStyle.getPropertyValue('--color-accent').trim() || '#00bcd4'
+    colors.highlight = computedStyle.getPropertyValue('--color-accent-hover').trim() || '#00acc1'
+    colors.text = computedStyle.getPropertyValue('--color-text-primary').trim() || '#ffffff'
+
+    console.log('Theme colors updated:', colors)
   }
 
   /**
