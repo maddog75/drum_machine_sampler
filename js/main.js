@@ -56,6 +56,8 @@
     // Initialize all modules
     Sequencer.init()
     LoopPedal.init()
+    SongMode.init()
+    Visualizations.init()
     UI.init()
 
     // Enable auto-save
@@ -88,6 +90,10 @@
       await AudioEngine.init()
       await AudioEngine.loadDrumSamples()
       console.log('Audio engine initialized with TR-808 samples')
+
+      // Initialize audio-dependent modules
+      Effects.init(AudioEngine.getContext())
+      console.log('Effects initialized')
 
       // Remove event listeners after first interaction
       document.removeEventListener('click', initAudio)

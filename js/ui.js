@@ -378,9 +378,58 @@ const UI = (() => {
       })
     }
 
+    // Visualizations button
+    const vizBtn = document.getElementById('vizBtn')
+    const vizMenu = document.getElementById('viz-menu')
+    if (vizBtn && vizMenu) {
+      vizBtn.addEventListener('click', () => {
+        vizMenu.classList.remove('hidden')
+      })
+    }
+
+    // Visualization window buttons
+    const openWaveformBtn = document.getElementById('openWaveformBtn')
+    const openFrequencyBtn = document.getElementById('openFrequencyBtn')
+    const openOscilloscopeBtn = document.getElementById('openOscilloscopeBtn')
+    const openSpectrumBtn = document.getElementById('openSpectrumBtn')
+    const openMeterBtn = document.getElementById('openMeterBtn')
+    const closeAllVizBtn = document.getElementById('closeAllVizBtn')
+
+    if (openWaveformBtn) openWaveformBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.WAVEFORM))
+    if (openFrequencyBtn) openFrequencyBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.FREQUENCY))
+    if (openOscilloscopeBtn) openOscilloscopeBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.OSCILLOSCOPE))
+    if (openSpectrumBtn) openSpectrumBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.SPECTRUM))
+    if (openMeterBtn) openMeterBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.METER))
+    if (closeAllVizBtn) closeAllVizBtn.addEventListener('click', () => Visualizations.closeAll())
+
+    // Effects button
+    const effectsBtn = document.getElementById('effectsBtn')
+    const effectsPanel = document.getElementById('effects-panel')
+    if (effectsBtn && effectsPanel) {
+      effectsBtn.addEventListener('click', () => {
+        effectsPanel.classList.remove('hidden')
+      })
+    }
+
+    // Effects controls
+    setupEffectsControls()
+
+    // Song Mode button
+    const songModeBtn = document.getElementById('songModeBtn')
+    const songModePanel = document.getElementById('song-mode-panel')
+    if (songModeBtn && songModePanel) {
+      songModeBtn.addEventListener('click', () => {
+        songModePanel.classList.remove('hidden')
+      })
+    }
+
+    // Song Mode controls
+    setupSongModeControls()
+
     // Save/Load buttons
     const saveBtn = document.getElementById('saveBtn')
     const loadBtn = document.getElementById('loadBtn')
+    const exportWavBtn = document.getElementById('exportWavBtn')
 
     if (saveBtn) {
       saveBtn.addEventListener('click', () => {
@@ -400,6 +449,12 @@ const UI = (() => {
           }
         }
         input.click()
+      })
+    }
+
+    if (exportWavBtn) {
+      exportWavBtn.addEventListener('click', () => {
+        Storage.exportAudioMix()
       })
     }
 
@@ -626,10 +681,194 @@ const UI = (() => {
     }
   }
 
+  /**
+   * Setup effects controls
+   */
+  const setupEffectsControls = () => {
+    // Reverb controls
+    const reverbEnabled = document.getElementById('reverbEnabled')
+    const reverbWetDry = document.getElementById('reverbWetDry')
+    const reverbWetDryValue = document.getElementById('reverbWetDryValue')
+    const reverbDecay = document.getElementById('reverbDecay')
+    const reverbDecayValue = document.getElementById('reverbDecayValue')
+
+    if (reverbEnabled) {
+      reverbEnabled.addEventListener('change', (e) => {
+        Effects.setReverb({ enabled: e.target.checked })
+      })
+    }
+
+    if (reverbWetDry) {
+      reverbWetDry.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 100
+        Effects.setReverb({ wetDry: value })
+        if (reverbWetDryValue) reverbWetDryValue.textContent = `${e.target.value}%`
+      })
+    }
+
+    if (reverbDecay) {
+      reverbDecay.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 10
+        Effects.setReverb({ decayTime: value })
+        if (reverbDecayValue) reverbDecayValue.textContent = `${value.toFixed(1)}s`
+      })
+    }
+
+    // Delay controls
+    const delayEnabled = document.getElementById('delayEnabled')
+    const delayWetDry = document.getElementById('delayWetDry')
+    const delayWetDryValue = document.getElementById('delayWetDryValue')
+    const delayTime = document.getElementById('delayTime')
+    const delayTimeValue = document.getElementById('delayTimeValue')
+    const delayFeedback = document.getElementById('delayFeedback')
+    const delayFeedbackValue = document.getElementById('delayFeedbackValue')
+
+    if (delayEnabled) {
+      delayEnabled.addEventListener('change', (e) => {
+        Effects.setDelay({ enabled: e.target.checked })
+      })
+    }
+
+    if (delayWetDry) {
+      delayWetDry.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 100
+        Effects.setDelay({ wetDry: value })
+        if (delayWetDryValue) delayWetDryValue.textContent = `${e.target.value}%`
+      })
+    }
+
+    if (delayTime) {
+      delayTime.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 100
+        Effects.setDelay({ delayTime: value })
+        if (delayTimeValue) delayTimeValue.textContent = `${value.toFixed(3)}s`
+      })
+    }
+
+    if (delayFeedback) {
+      delayFeedback.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 100
+        Effects.setDelay({ feedback: value })
+        if (delayFeedbackValue) delayFeedbackValue.textContent = `${e.target.value}%`
+      })
+    }
+
+    // Distortion controls
+    const distortionEnabled = document.getElementById('distortionEnabled')
+    const distortionAmount = document.getElementById('distortionAmount')
+    const distortionAmountValue = document.getElementById('distortionAmountValue')
+    const distortionTone = document.getElementById('distortionTone')
+    const distortionToneValue = document.getElementById('distortionToneValue')
+
+    if (distortionEnabled) {
+      distortionEnabled.addEventListener('change', (e) => {
+        Effects.setDistortion({ enabled: e.target.checked })
+      })
+    }
+
+    if (distortionAmount) {
+      distortionAmount.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 100
+        Effects.setDistortion({ amount: value })
+        if (distortionAmountValue) distortionAmountValue.textContent = `${e.target.value}%`
+      })
+    }
+
+    if (distortionTone) {
+      distortionTone.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 100
+        Effects.setDistortion({ tone: value })
+        if (distortionToneValue) distortionToneValue.textContent = `${e.target.value}%`
+      })
+    }
+  }
+
+  /**
+   * Setup song mode controls
+   */
+  const setupSongModeControls = () => {
+    const addSectionBtn = document.getElementById('addSectionBtn')
+    const playSongBtn = document.getElementById('playSongBtn')
+    const stopSongBtn = document.getElementById('stopSongBtn')
+    const clearSongBtn = document.getElementById('clearSongBtn')
+    const songSections = document.getElementById('songSections')
+
+    if (addSectionBtn) {
+      addSectionBtn.addEventListener('click', () => {
+        const name = prompt('Section name:', `Section ${SongMode.getSong().length + 1}`)
+        if (name) {
+          const section = SongMode.createSectionFromCurrent(name, 1)
+          SongMode.addSection(section)
+          updateSongSections()
+        }
+      })
+    }
+
+    if (playSongBtn) {
+      playSongBtn.addEventListener('click', () => {
+        SongMode.play()
+      })
+    }
+
+    if (stopSongBtn) {
+      stopSongBtn.addEventListener('click', () => {
+        SongMode.stop()
+      })
+    }
+
+    if (clearSongBtn) {
+      clearSongBtn.addEventListener('click', () => {
+        if (confirm('Clear entire song?')) {
+          SongMode.clearSong()
+          updateSongSections()
+        }
+      })
+    }
+
+    // Listen to song mode events
+    SongMode.on('sectionAdded', () => updateSongSections())
+    SongMode.on('sectionRemoved', () => updateSongSections())
+    SongMode.on('songCleared', () => updateSongSections())
+  }
+
+  /**
+   * Update song sections display
+   */
+  const updateSongSections = () => {
+    const songSections = document.getElementById('songSections')
+    if (!songSections) return
+
+    const sections = SongMode.getSong()
+
+    if (sections.length === 0) {
+      songSections.innerHTML = '<p style="color: var(--color-text-secondary); font-style: italic;">No sections added yet</p>'
+      return
+    }
+
+    songSections.innerHTML = sections.map((section, index) => `
+      <div class="song-section" style="
+        padding: 8px;
+        margin: 8px 0;
+        background: var(--color-bg-tertiary);
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+      ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong>${section.name}</strong><br>
+            <small style="color: var(--color-text-secondary);">${section.tempo} BPM × ${section.repeats}</small>
+          </div>
+          <button class="btn btn--danger" onclick="SongMode.removeSection(${index}); UI.updateSongSections()" style="padding: 4px 8px;">×</button>
+        </div>
+      </div>
+    `).join('')
+  }
+
   // Public API
   return {
     init,
     renderSequencerGrid,
-    updateThemeColors
+    updateThemeColors,
+    updateSongSections
   }
 })()

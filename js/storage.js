@@ -138,17 +138,72 @@ const Storage = (() => {
 
   /**
    * Export audio mix as WAV file
-   * Note: This is a placeholder - proper implementation would require
-   * mixing all tracks and exporting as WAV
+   * Mixes sequencer pattern and loop pedal tracks into a single WAV file
    */
   const exportAudioMix = async () => {
     try {
-      // TODO: Implement proper audio mixing and WAV export
-      console.log('Audio export not yet implemented')
-      alert('Audio export feature coming soon!')
-      return false
+      const audioContext = AudioEngine.getContext()
+      if (!audioContext) {
+        alert('Audio engine not initialized. Please click somewhere on the page first.')
+        return false
+      }
+
+      // Show progress message
+      const originalText = 'Rendering audio mix...'
+      console.log(originalText)
+
+      // Collect all audio buffers to mix
+      const buffersToMix = []
+
+      // 1. Render current sequencer pattern (4 bars)
+      const pattern = Sequencer.getPattern()
+      const tempo = Sequencer.getTempo()
+
+      if (pattern) {
+        try {
+          const patternBuffer = await WAVEncoder.renderPattern(audioContext, pattern, tempo, 4)
+          if (patternBuffer) {
+            buffersToMix.push(patternBuffer)
+          }
+        } catch (error) {
+          console.warn('Failed to render pattern:', error)
+        }
+      }
+
+      // 2. Get loop pedal tracks
+      const loopTracks = LoopPedal.getAllTracksInfo()
+      loopTracks.forEach(track => {
+        if (track.buffer && !track.isMuted) {
+          buffersToMix.push(track.buffer)
+        }
+      })
+
+      // Check if we have anything to export
+      if (buffersToMix.length === 0) {
+        alert('Nothing to export! Create a drum pattern or record some loops first.')
+        return false
+      }
+
+      // 3. Mix all buffers together
+      const mixedBuffer = WAVEncoder.mixBuffers(audioContext, buffersToMix)
+
+      // 4. Encode to WAV
+      const wavBlob = WAVEncoder.encodeWAV(mixedBuffer, 16)
+
+      // 5. Download the file
+      const url = URL.createObjectURL(wavBlob)
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filename = `drum-machine-mix-${timestamp}.wav`
+
+      downloadFile(url, filename)
+      URL.revokeObjectURL(url)
+
+      console.log('Audio mix exported successfully')
+      alert('Audio mix exported successfully!')
+      return true
     } catch (error) {
       console.error('Failed to export audio:', error)
+      alert('Failed to export audio mix. Check console for details.')
       return false
     }
   }
