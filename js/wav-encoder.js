@@ -145,10 +145,12 @@ const WAVEncoder = (() => {
     })
 
     // Normalize to prevent clipping
-    const maxAmplitude = Math.max(
-      Math.max(...leftChannel.map(Math.abs)),
-      Math.max(...rightChannel.map(Math.abs))
-    )
+    let maxAmplitude = 0
+    for (let i = 0; i < outputLength; i++) {
+      const leftAbs = Math.abs(leftChannel[i])
+      const rightAbs = Math.abs(rightChannel[i])
+      maxAmplitude = Math.max(maxAmplitude, leftAbs, rightAbs)
+    }
 
     if (maxAmplitude > 1) {
       for (let i = 0; i < outputLength; i++) {
@@ -194,7 +196,7 @@ const WAVEncoder = (() => {
       instruments.forEach(instrument => {
         if (pattern.pattern[instrument][patternStep]) {
           // Get the audio buffer for this instrument
-          const buffer = AudioEngine.getInstruments().find(i => i.id === instrument)
+          const buffer = AudioEngine.getSampleBuffer(instrument)
           if (buffer) {
             const source = offlineContext.createBufferSource()
             source.buffer = buffer

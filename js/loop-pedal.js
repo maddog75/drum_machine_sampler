@@ -106,6 +106,15 @@ const LoopPedal = (() => {
    */
   const enableMicrophone = async () => {
     try {
+      // Check if mediaDevices is available (requires HTTPS or localhost)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const errorMsg = 'Microphone access requires HTTPS or localhost. Please access this page via https:// or http://localhost/'
+        console.error(errorMsg)
+        alert(errorMsg)
+        emit('microphoneEnabled', false)
+        return false
+      }
+
       mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -119,6 +128,7 @@ const LoopPedal = (() => {
       return true
     } catch (error) {
       console.error('Microphone access denied:', error)
+      alert('Microphone access was denied. Please allow microphone access in your browser settings.')
       emit('microphoneEnabled', false)
       return false
     }

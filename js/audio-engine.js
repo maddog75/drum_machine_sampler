@@ -209,6 +209,15 @@ const AudioEngine = (() => {
     return isInitialized
   }
 
+  /**
+   * Get the AudioBuffer for a specific instrument
+   * @param {string} instrumentId - The instrument ID
+   * @returns {AudioBuffer|null} The audio buffer or null if not found
+   */
+  const getSampleBuffer = (instrumentId) => {
+    return audioBuffers[instrumentId] || null
+  }
+
   // Public API
   return {
     init,
@@ -221,6 +230,7 @@ const AudioEngine = (() => {
     getAnalyser,
     getContext,
     getInstruments,
+    getSampleBuffer,
     isReady
   }
 })()
