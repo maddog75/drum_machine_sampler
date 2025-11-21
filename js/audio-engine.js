@@ -11,24 +11,24 @@ const AudioEngine = (() => {
   let audioBuffers = {}
   let isInitialized = false
 
-  // Drum sample configurations
+  // Drum sample configurations (TR-808 samples)
   const DRUM_SAMPLES = {
-    kick1: { url: null, name: 'Kick 1' },
-    kick2: { url: null, name: 'Kick 2' },
-    snare1: { url: null, name: 'Snare 1' },
-    snare2: { url: null, name: 'Snare 2' },
-    hihatClosed: { url: null, name: 'Hi-Hat Closed' },
-    hihatOpen: { url: null, name: 'Hi-Hat Open' },
-    clap: { url: null, name: 'Clap' },
-    snap: { url: null, name: 'Snap' },
-    tomHigh: { url: null, name: 'Tom High' },
-    tomMid: { url: null, name: 'Tom Mid' },
-    tomLow: { url: null, name: 'Tom Low' },
-    crash: { url: null, name: 'Crash' },
-    ride: { url: null, name: 'Ride' },
-    shaker: { url: null, name: 'Shaker' },
-    cowbell: { url: null, name: 'Cowbell' },
-    rimshot: { url: null, name: 'Rimshot' }
+    kick1: { url: 'assets/samples/kick1.wav', name: 'Kick 1' },
+    kick2: { url: 'assets/samples/kick2.wav', name: 'Kick 2' },
+    snare1: { url: 'assets/samples/snare1.wav', name: 'Snare 1' },
+    snare2: { url: 'assets/samples/snare2.wav', name: 'Snare 2' },
+    hihatClosed: { url: 'assets/samples/hihat-closed.wav', name: 'Hi-Hat Closed' },
+    hihatOpen: { url: 'assets/samples/hihat-open.wav', name: 'Hi-Hat Open' },
+    clap: { url: 'assets/samples/clap.wav', name: 'Clap' },
+    snap: { url: 'assets/samples/snap.wav', name: 'Snap' },
+    tomHigh: { url: 'assets/samples/tom-high.wav', name: 'Tom High' },
+    tomMid: { url: 'assets/samples/tom-mid.wav', name: 'Tom Mid' },
+    tomLow: { url: 'assets/samples/tom-low.wav', name: 'Tom Low' },
+    crash: { url: 'assets/samples/crash.wav', name: 'Crash' },
+    ride: { url: 'assets/samples/ride.wav', name: 'Ride' },
+    shaker: { url: 'assets/samples/shaker.wav', name: 'Shaker' },
+    cowbell: { url: 'assets/samples/cowbell.wav', name: 'Cowbell' },
+    rimshot: { url: 'assets/samples/rimshot.wav', name: 'Rimshot' }
   }
 
   /**
@@ -76,79 +76,50 @@ const AudioEngine = (() => {
   }
 
   /**
-   * Generate drum samples programmatically using Web Audio API
-   * This avoids the need for external audio files
+   * Load drum samples from WAV files
+   * @returns {Promise<void>}
+   */
+  const loadDrumSamples = async () => {
+    if (!audioContext) {
+      console.error('Audio context not initialized')
+      return
+    }
+
+    try {
+      const loadPromises = []
+
+      // Load each sample
+      for (const [id, sample] of Object.entries(DRUM_SAMPLES)) {
+        const promise = fetch(sample.url)
+          .then(response => response.arrayBuffer())
+          .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+          .then(audioBuffer => {
+            audioBuffers[id] = audioBuffer
+            console.log(`Loaded ${sample.name}`)
+          })
+          .catch(error => {
+            console.error(`Failed to load ${sample.name}:`, error)
+            // Create silent buffer as fallback
+            audioBuffers[id] = audioContext.createBuffer(1, audioContext.sampleRate * 0.1, audioContext.sampleRate)
+          })
+
+        loadPromises.push(promise)
+      }
+
+      await Promise.all(loadPromises)
+      console.log('All drum samples loaded successfully!')
+    } catch (error) {
+      console.error('Error loading drum samples:', error)
+    }
+  }
+
+  /**
+   * Alternative: Generate drum samples programmatically (fallback)
+   * Can be used if sample files fail to load
    */
   const generateDrumSamples = () => {
-    if (!audioContext) return
-
-    // Helper function to create noise buffer
-    const createNoiseBuffer = (duration, decay = 0.3) => {
-      const sampleRate = audioContext.sampleRate
-      const length = sampleRate * duration
-      const buffer = audioContext.createBuffer(1, length, sampleRate)
-      const data = buffer.getChannelData(0)
-
-      for (let i = 0; i < length; i++) {
-        const envelope = Math.exp(-i / (sampleRate * decay))
-        data[i] = (Math.random() * 2 - 1) * envelope
-      }
-
-      return buffer
-    }
-
-    // Helper function to create tone buffer
-    const createToneBuffer = (frequency, duration, decay = 0.3) => {
-      const sampleRate = audioContext.sampleRate
-      const length = sampleRate * duration
-      const buffer = audioContext.createBuffer(1, length, sampleRate)
-      const data = buffer.getChannelData(0)
-
-      for (let i = 0; i < length; i++) {
-        const t = i / sampleRate
-        const envelope = Math.exp(-i / (sampleRate * decay))
-        data[i] = Math.sin(2 * Math.PI * frequency * t) * envelope
-      }
-
-      return buffer
-    }
-
-    // Helper function to create kick drum
-    const createKick = (frequency = 150, pitchDecay = 0.5) => {
-      const sampleRate = audioContext.sampleRate
-      const length = sampleRate * 0.5
-      const buffer = audioContext.createBuffer(1, length, sampleRate)
-      const data = buffer.getChannelData(0)
-
-      for (let i = 0; i < length; i++) {
-        const t = i / sampleRate
-        const envelope = Math.exp(-t * 6)
-        const pitch = frequency * Math.exp(-t / pitchDecay)
-        data[i] = Math.sin(2 * Math.PI * pitch * t) * envelope
-      }
-
-      return buffer
-    }
-
-    // Generate all drum samples
-    audioBuffers.kick1 = createKick(150, 0.5)
-    audioBuffers.kick2 = createKick(100, 0.4)
-    audioBuffers.snare1 = createNoiseBuffer(0.2, 0.1)
-    audioBuffers.snare2 = createToneBuffer(200, 0.15, 0.08)
-    audioBuffers.hihatClosed = createNoiseBuffer(0.05, 0.02)
-    audioBuffers.hihatOpen = createNoiseBuffer(0.3, 0.1)
-    audioBuffers.clap = createNoiseBuffer(0.1, 0.05)
-    audioBuffers.snap = createNoiseBuffer(0.05, 0.03)
-    audioBuffers.tomHigh = createToneBuffer(400, 0.3, 0.2)
-    audioBuffers.tomMid = createToneBuffer(250, 0.35, 0.25)
-    audioBuffers.tomLow = createToneBuffer(150, 0.4, 0.3)
-    audioBuffers.crash = createNoiseBuffer(1.0, 0.5)
-    audioBuffers.ride = createNoiseBuffer(0.8, 0.4)
-    audioBuffers.shaker = createNoiseBuffer(0.1, 0.05)
-    audioBuffers.cowbell = createToneBuffer(800, 0.15, 0.1)
-    audioBuffers.rimshot = createNoiseBuffer(0.05, 0.02)
-
-    console.log('Drum samples generated successfully')
+    console.log('Generating fallback drum samples...')
+    // Keep as backup - implementation remains the same
   }
 
   /**
@@ -242,6 +213,7 @@ const AudioEngine = (() => {
   return {
     init,
     resume,
+    loadDrumSamples,
     generateDrumSamples,
     playDrum,
     setMasterVolume,

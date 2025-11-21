@@ -86,8 +86,8 @@
   const setupFirstInteraction = () => {
     const initAudio = async () => {
       await AudioEngine.init()
-      AudioEngine.generateDrumSamples()
-      console.log('Audio engine initialized')
+      await AudioEngine.loadDrumSamples()
+      console.log('Audio engine initialized with TR-808 samples')
 
       // Remove event listeners after first interaction
       document.removeEventListener('click', initAudio)
