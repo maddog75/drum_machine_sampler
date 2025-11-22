@@ -54,13 +54,13 @@ const AudioEngine = (() => {
       analyserNode = audioContext.createAnalyser()
       analyserNode.fftSize = 2048
       analyserNode.smoothingTimeConstant = 0.8
-      masterGainNode.connect(analyserNode)
 
       // Initialize effects and route audio through effects chain
       Effects.init(audioContext)
-      // Route: masterGain -> effects -> destination
+      // Route: masterGain -> effects -> analyser -> destination
       masterGainNode.connect(Effects.getInputNode())
-      Effects.getOutputNode().connect(audioContext.destination)
+      Effects.getOutputNode().connect(analyserNode)
+      analyserNode.connect(audioContext.destination)
 
       isInitialized = true
       console.log('Audio Engine initialized successfully')

@@ -91,10 +91,6 @@
       await AudioEngine.loadDrumSamples()
       console.log('Audio engine initialized with TR-808 samples')
 
-      // Initialize audio-dependent modules
-      Effects.init(AudioEngine.getContext())
-      console.log('Effects initialized')
-
       // Remove event listeners after first interaction
       document.removeEventListener('click', initAudio)
       document.removeEventListener('keydown', initAudio)
