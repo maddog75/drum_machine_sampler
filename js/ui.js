@@ -444,7 +444,12 @@ const UI = (() => {
 
     if (playPauseBtn) {
       playPauseBtn.addEventListener('click', () => {
-        Sequencer.togglePlayPause()
+        // If chain mode is enabled and not playing, start chain mode
+        if (SongMode.getChainMode() && !Sequencer.getIsPlaying()) {
+          SongMode.startChainMode()
+        } else {
+          Sequencer.togglePlayPause()
+        }
         updatePlayButton()
       })
     }

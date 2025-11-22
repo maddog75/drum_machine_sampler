@@ -217,6 +217,7 @@ const Sequencer = (() => {
     currentStep++
     if (currentStep >= 16) {
       currentStep = 0
+      emit('barCompleted')  // Emit event when bar completes
     }
   }
 

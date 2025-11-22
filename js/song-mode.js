@@ -17,6 +17,11 @@ const SongMode = (() => {
   let queuedPatternIndex = null
   let chainMode = false
 
+  // Chain mode playback state
+  let chainModeActive = false
+  let chainCurrentPattern = 0
+  let chainCurrentRepeat = 0
+
   /**
    * Song section structure:
    * {
@@ -37,7 +42,10 @@ const SongMode = (() => {
       if (isPlaying) {
         stop()
       }
+      stopChainMode()
     })
+
+    Sequencer.on('barCompleted', handleBarCompleted)
 
     // Initialize pattern bank with 10 empty slots
     initializePatternBank()
@@ -240,6 +248,16 @@ const SongMode = (() => {
    */
   const setChainMode = (enabled) => {
     chainMode = enabled
+
+    // If enabling during playback, start chain mode
+    if (enabled && Sequencer.getIsPlaying() && !chainModeActive) {
+      startChainMode()
+    }
+    // If disabling, stop chain mode
+    else if (!enabled && chainModeActive) {
+      stopChainMode()
+    }
+
     emit('chainModeChanged', { enabled })
   }
 
@@ -552,6 +570,91 @@ const SongMode = (() => {
   }
 
   /**
+   * Start chain mode playback
+   */
+  const startChainMode = () => {
+    if (!chainMode) return
+
+    chainModeActive = true
+    chainCurrentPattern = 0
+    chainCurrentRepeat = 0
+
+    // Find first non-empty pattern
+    while (chainCurrentPattern < 10 && patternBank[chainCurrentPattern].isEmpty) {
+      chainCurrentPattern++
+    }
+
+    if (chainCurrentPattern >= 10) {
+      // No patterns to play
+      console.warn('No patterns in chain mode')
+      stopChainMode()
+      return
+    }
+
+    // Load and play first pattern
+    applyPatternSwitch(chainCurrentPattern)
+
+    if (!Sequencer.getIsPlaying()) {
+      Sequencer.play()
+    }
+
+    emit('chainModeStarted', { pattern: chainCurrentPattern })
+  }
+
+  /**
+   * Stop chain mode playback
+   */
+  const stopChainMode = () => {
+    if (chainModeActive) {
+      chainModeActive = false
+      chainCurrentPattern = 0
+      chainCurrentRepeat = 0
+      emit('chainModeStopped')
+    }
+  }
+
+  /**
+   * Handle bar completed event from sequencer
+   */
+  const handleBarCompleted = () => {
+    if (!chainModeActive || !Sequencer.getIsPlaying()) return
+
+    const slot = patternBank[chainCurrentPattern]
+    chainCurrentRepeat++
+
+    // Check if we've completed all repeats for this pattern
+    if (chainCurrentRepeat >= slot.repeats) {
+      advanceChainPattern()
+    }
+  }
+
+  /**
+   * Advance to next pattern in chain mode
+   */
+  const advanceChainPattern = () => {
+    chainCurrentRepeat = 0
+    chainCurrentPattern++
+
+    // Find next non-empty pattern
+    while (chainCurrentPattern < 10 && patternBank[chainCurrentPattern].isEmpty) {
+      chainCurrentPattern++
+    }
+
+    // Check if we've reached the end
+    if (chainCurrentPattern >= 10) {
+      // Chain complete, stop or loop
+      stopChainMode()
+      Sequencer.stop()
+      emit('chainModeCompleted')
+      return
+    }
+
+    // Switch to next pattern
+    applyPatternSwitch(chainCurrentPattern)
+    emit('chainModePatternChanged', { pattern: chainCurrentPattern })
+  }
+
+  /**
    * Event listener system
    */
   const on = (event, callback) => {
@@ -608,6 +711,8 @@ const SongMode = (() => {
     getCurrentPatternIndex,
     setChainMode,
     getChainMode,
+    startChainMode,
+    stopChainMode,
     on,
     off
   }
