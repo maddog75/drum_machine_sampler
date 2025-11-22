@@ -24,6 +24,24 @@ const Sequencer = (() => {
     if (patterns.length > 0) {
       loadPattern(patterns[0])
     }
+
+    // Initialize loop tracks in pattern
+    initializeLoopTracks()
+  }
+
+  /**
+   * Initialize loop pedal tracks in the current pattern
+   */
+  const initializeLoopTracks = () => {
+    if (!currentPattern) return
+
+    // Add 6 loop tracks if they don't exist
+    for (let i = 1; i <= 6; i++) {
+      const loopId = `loop${i}`
+      if (!currentPattern.pattern[loopId]) {
+        currentPattern.pattern[loopId] = new Array(16).fill(0)
+      }
+    }
   }
 
   /**
@@ -33,6 +51,10 @@ const Sequencer = (() => {
   const loadPattern = (pattern) => {
     currentPattern = JSON.parse(JSON.stringify(pattern)) // Deep clone
     tempo = pattern.tempo
+
+    // Ensure loop tracks exist in the loaded pattern
+    initializeLoopTracks()
+
     emit('patternLoaded', currentPattern)
     emit('tempoChanged', tempo)
   }
@@ -136,7 +158,7 @@ const Sequencer = (() => {
   const scheduleNote = (step, time) => {
     if (!currentPattern) return
 
-    // Play all instruments for this step
+    // Play all drum instruments for this step
     const instruments = AudioEngine.getInstruments()
     instruments.forEach(instrument => {
       const value = currentPattern.pattern[instrument.id]?.[step]
@@ -145,6 +167,17 @@ const Sequencer = (() => {
         AudioEngine.playDrum(instrument.id, time, value)
       }
     })
+
+    // Play all loop tracks for this step
+    for (let i = 1; i <= 6; i++) {
+      const loopId = `loop${i}`
+      const value = currentPattern.pattern[loopId]?.[step]
+      if (value) {
+        // Trigger loop playback (loop tracks are 0-indexed)
+        const loopTrackIndex = i - 1
+        LoopPedal.playTrack(loopTrackIndex)
+      }
+    }
 
     // Emit event for UI update (on main thread)
     emit('stepTriggered', step)
@@ -347,6 +380,28 @@ const Sequencer = (() => {
   }
 
   /**
+   * Get all tracks (drums + loops) for UI rendering
+   * @returns {Array} Array of track objects with id and name
+   */
+  const getAllTracks = () => {
+    const tracks = []
+
+    // Add drum instruments
+    const drumInstruments = AudioEngine.getInstruments()
+    tracks.push(...drumInstruments)
+
+    // Add loop tracks
+    for (let i = 1; i <= 6; i++) {
+      tracks.push({
+        id: `loop${i}`,
+        name: `Loop ${i}`
+      })
+    }
+
+    return tracks
+  }
+
+  /**
    * Export pattern data for session save
    * @returns {Object} Pattern data
    */
@@ -397,6 +452,7 @@ const Sequencer = (() => {
     off,
     getBeatPosition,
     getNextBarTime,
+    getAllTracks,
     exportPattern,
     importPattern
   }

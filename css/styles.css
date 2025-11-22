@@ -414,6 +414,12 @@ textarea {
   border-bottom: none;
 }
 
+.track-name--loop {
+  background: var(--color-bg-secondary);
+  font-style: italic;
+  color: var(--color-accent);
+}
+
 .sequencer__grid-wrapper {
   position: relative;
   overflow: hidden;

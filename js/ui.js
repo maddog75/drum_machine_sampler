@@ -123,14 +123,20 @@ const UI = (() => {
   const renderTrackNames = () => {
     if (!trackNamesContainer) return
 
-    const instruments = AudioEngine.getInstruments()
+    const allTracks = Sequencer.getAllTracks()
     trackNamesContainer.innerHTML = ''
 
-    instruments.forEach(instrument => {
+    allTracks.forEach(track => {
       const nameDiv = document.createElement('div')
       nameDiv.className = 'track-name'
-      nameDiv.textContent = instrument.name
-      nameDiv.dataset.instrument = instrument.id
+      nameDiv.textContent = track.name
+      nameDiv.dataset.instrument = track.id
+
+      // Add special styling for loop tracks
+      if (track.id.startsWith('loop')) {
+        nameDiv.classList.add('track-name--loop')
+      }
+
       trackNamesContainer.appendChild(nameDiv)
     })
   }
@@ -223,21 +229,21 @@ const UI = (() => {
     const pattern = Sequencer.getPattern()
     if (!pattern) return
 
-    const instruments = AudioEngine.getInstruments()
-    const numInstruments = instruments.length
+    const allTracks = Sequencer.getAllTracks()
+    const numTracks = allTracks.length
     const numSteps = 16
 
     gridCellWidth = width / numSteps
-    gridCellHeight = height / numInstruments
+    gridCellHeight = height / numTracks
 
     // Draw grid and steps
-    instruments.forEach((instrument, row) => {
+    allTracks.forEach((track, row) => {
       for (let col = 0; col < numSteps; col++) {
         const x = col * gridCellWidth
         const y = row * gridCellHeight
 
         // Check if step is active
-        const isActive = pattern.pattern[instrument.id]?.[col] === 1
+        const isActive = pattern.pattern[track.id]?.[col] === 1
 
         // Highlight current step
         const isHighlighted = col === currentHighlightedStep
@@ -525,14 +531,16 @@ const UI = (() => {
     const col = Math.floor(x / gridCellWidth)
     const row = Math.floor(y / gridCellHeight)
 
-    const instruments = AudioEngine.getInstruments()
-    if (row >= 0 && row < instruments.length && col >= 0 && col < 16) {
-      const instrument = instruments[row]
-      Sequencer.toggleStep(instrument.id, col)
+    const allTracks = Sequencer.getAllTracks()
+    if (row >= 0 && row < allTracks.length && col >= 0 && col < 16) {
+      const track = allTracks[row]
+      Sequencer.toggleStep(track.id, col)
       renderSequencerGrid()
 
-      // Preview sound
-      AudioEngine.playDrum(instrument.id)
+      // Preview sound (only for drum tracks)
+      if (!track.id.startsWith('loop')) {
+        AudioEngine.playDrum(track.id)
+      }
     }
   }
 
