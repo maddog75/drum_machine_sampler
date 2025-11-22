@@ -451,6 +451,8 @@ const Effects = (() => {
    * @param {Object} params - Reverb parameters {wetDry, decayTime}
    */
   const setReverb = (params) => {
+    if (!reverbNode) return // Not initialized yet
+
     if (params.wetDry !== undefined) {
       effectsSettings.reverb.wetDry = Math.max(0, Math.min(1, params.wetDry))
       if (reverbNode.wetGain) reverbNode.wetGain.gain.value = effectsSettings.reverb.wetDry
@@ -473,6 +475,8 @@ const Effects = (() => {
    * @param {Object} params - Delay parameters {wetDry, delayTime, feedback}
    */
   const setDelay = (params) => {
+    if (!delayNode) return // Not initialized yet
+
     if (params.wetDry !== undefined) {
       effectsSettings.delay.wetDry = Math.max(0, Math.min(1, params.wetDry))
       delayNode.wetGain.gain.value = effectsSettings.delay.wetDry
@@ -500,6 +504,8 @@ const Effects = (() => {
    * @param {Object} params - Distortion parameters {amount, tone}
    */
   const setDistortion = (params) => {
+    if (!distortionNode) return // Not initialized yet
+
     if (params.amount !== undefined) {
       effectsSettings.distortion.amount = Math.max(0, Math.min(1, params.amount))
       generateDistortionCurve(effectsSettings.distortion.amount)
@@ -522,6 +528,8 @@ const Effects = (() => {
    * @param {Object} params - Compressor parameters {threshold, ratio, attack, release}
    */
   const setCompressor = (params) => {
+    if (!compressorNode) return // Not initialized yet
+
     if (params.threshold !== undefined) {
       effectsSettings.compressor.threshold = Math.max(-100, Math.min(0, params.threshold))
       compressorNode.threshold.value = effectsSettings.compressor.threshold
@@ -553,6 +561,8 @@ const Effects = (() => {
    * @param {Object} params - EQ parameters {low, mid, high} in dB (-15 to +15)
    */
   const setEQ = (params) => {
+    if (!eqNode) return // Not initialized yet
+
     if (params.low !== undefined) {
       effectsSettings.eq.low = Math.max(-15, Math.min(15, params.low))
       eqNode.lowBand.gain.value = effectsSettings.eq.low
@@ -579,6 +589,8 @@ const Effects = (() => {
    * @param {Object} params - Filter parameters {type, frequency, resonance}
    */
   const setFilter = (params) => {
+    if (!filterNode) return // Not initialized yet
+
     if (params.type !== undefined) {
       effectsSettings.filter.type = params.type
       filterNode.type = params.type
@@ -605,6 +617,8 @@ const Effects = (() => {
    * @param {Object} params - Chorus parameters {rate, depth, mix}
    */
   const setChorus = (params) => {
+    if (!chorusNode) return // Not initialized yet
+
     if (params.rate !== undefined) {
       effectsSettings.chorus.rate = Math.max(0.1, Math.min(10, params.rate))
       chorusNode.lfo.frequency.value = effectsSettings.chorus.rate
@@ -632,6 +646,8 @@ const Effects = (() => {
    * @param {Object} params - Phaser parameters {rate, depth, feedback}
    */
   const setPhaser = (params) => {
+    if (!phaserNode) return // Not initialized yet
+
     if (params.rate !== undefined) {
       effectsSettings.phaser.rate = Math.max(0.1, Math.min(10, params.rate))
       phaserNode.lfo.frequency.value = effectsSettings.phaser.rate
