@@ -525,8 +525,14 @@ const UI = (() => {
    */
   const handleSequencerClick = (e) => {
     const rect = sequencerCanvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+
+    // Use more precise coordinate calculation
+    // Account for any CSS scaling by using canvas dimensions
+    const scaleX = sequencerCanvas.width / rect.width
+    const scaleY = sequencerCanvas.height / rect.height
+
+    const x = (e.clientX - rect.left) * scaleX
+    const y = (e.clientY - rect.top) * scaleY
 
     const col = Math.floor(x / gridCellWidth)
     const row = Math.floor(y / gridCellHeight)

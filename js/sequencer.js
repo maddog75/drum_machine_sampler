@@ -168,14 +168,15 @@ const Sequencer = (() => {
       }
     })
 
-    // Play all loop tracks for this step
+    // Play all loop tracks for this step (one-shot, not looping)
     for (let i = 1; i <= 6; i++) {
       const loopId = `loop${i}`
       const value = currentPattern.pattern[loopId]?.[step]
       if (value) {
-        // Trigger loop playback (loop tracks are 0-indexed)
+        // Trigger one-shot loop playback (loop tracks are 0-indexed)
         const loopTrackIndex = i - 1
-        LoopPedal.playTrack(loopTrackIndex)
+        // Play loop as one-shot with precise timing, like a drum sample
+        LoopPedal.playTrack(loopTrackIndex, false, time)
       }
     }
 

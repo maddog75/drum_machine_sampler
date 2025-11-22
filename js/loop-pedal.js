@@ -67,8 +67,10 @@ const LoopPedal = (() => {
       this.isRecording = false
     }
 
-    play(startTime = null) {
-      if (!this.audioBuffer || this.isPlaying) return
+    play(startTime = null, loop = true) {
+      // Allow one-shot playback (loop=false) to always play, even if already playing
+      if (!this.audioBuffer) return
+      if (loop && this.isPlaying) return // Only skip if looping and already playing
 
       const context = AudioEngine.getContext()
       if (!context) return
@@ -77,14 +79,31 @@ const LoopPedal = (() => {
       this.initAudioNodes()
       if (!this.gainNode) return
 
+      // Stop previous source if playing (for one-shot mode)
+      if (this.source && !loop) {
+        try {
+          this.source.stop()
+        } catch (e) {
+          // Ignore if already stopped
+        }
+      }
+
       this.source = context.createBufferSource()
       this.source.buffer = this.audioBuffer
-      this.source.loop = true
+      this.source.loop = loop
       this.source.connect(this.gainNode)
+
+      // Handle one-shot playback
+      if (!loop) {
+        this.source.onended = () => {
+          this.source = null
+          this.isPlaying = false
+        }
+      }
 
       const time = startTime || context.currentTime
       this.source.start(time)
-      this.isPlaying = true
+      this.isPlaying = loop // Only mark as playing if looping
     }
 
     stop() {
@@ -308,18 +327,24 @@ const LoopPedal = (() => {
   }
 
   /**
-   * Play a loop track (quantized to next bar)
+   * Play a loop track
    * @param {number} trackIndex - Track index (0-5)
+   * @param {boolean} loop - Whether to loop continuously (default: true)
+   * @param {number} time - Optional start time (AudioContext time)
    */
-  const playTrack = (trackIndex) => {
+  const playTrack = (trackIndex, loop = true, time = null) => {
     if (trackIndex < 0 || trackIndex >= NUM_TRACKS) return
 
     const track = tracks[trackIndex]
     if (!track.audioBuffer) return
 
-    // Quantize playback to next bar for musical synchronization
-    const startTime = Sequencer.getNextBarTime()
-    track.play(startTime)
+    // Use provided time, or quantize to next bar for looping playback
+    let startTime = time
+    if (!startTime) {
+      startTime = loop ? Sequencer.getNextBarTime() : null
+    }
+
+    track.play(startTime, loop)
     emit('trackPlaying', trackIndex)
   }
 
