@@ -347,13 +347,28 @@ const UI = (() => {
       })
     }
 
-    // Tempo input
-    const tempoInput = document.getElementById('tempoInput')
-    if (tempoInput) {
-      tempoInput.addEventListener('input', (e) => {
+    // Tempo slider
+    const tempoSlider = document.getElementById('tempoSlider')
+    const tempoValue = document.getElementById('tempoValue')
+    if (tempoSlider) {
+      tempoSlider.addEventListener('input', (e) => {
         const tempo = parseInt(e.target.value, 10)
         Sequencer.setTempo(tempo)
+        if (tempoValue) {
+          tempoValue.textContent = tempo
+        }
         updateTempoDisplay()
+      })
+    }
+
+    // Clear sequencer button
+    const clearSequencerBtn = document.getElementById('clearSequencerBtn')
+    if (clearSequencerBtn) {
+      clearSequencerBtn.addEventListener('click', () => {
+        if (confirm('Clear all drum patterns? This cannot be undone.')) {
+          Sequencer.clearPattern()
+          renderSequencerGrid()
+        }
       })
     }
 
@@ -603,14 +618,20 @@ const UI = (() => {
       case '=':
         e.preventDefault()
         Sequencer.setTempo(Sequencer.getTempo() + 5)
-        document.getElementById('tempoInput').value = Sequencer.getTempo()
+        const sliderPlus = document.getElementById('tempoSlider')
+        const valuePlus = document.getElementById('tempoValue')
+        if (sliderPlus) sliderPlus.value = Sequencer.getTempo()
+        if (valuePlus) valuePlus.textContent = Sequencer.getTempo()
         updateTempoDisplay()
         break
       case '-':
       case '_':
         e.preventDefault()
         Sequencer.setTempo(Sequencer.getTempo() - 5)
-        document.getElementById('tempoInput').value = Sequencer.getTempo()
+        const sliderMinus = document.getElementById('tempoSlider')
+        const valueMinus = document.getElementById('tempoValue')
+        if (sliderMinus) sliderMinus.value = Sequencer.getTempo()
+        if (valueMinus) valueMinus.textContent = Sequencer.getTempo()
         updateTempoDisplay()
         break
       case '1':

@@ -206,18 +206,22 @@
         <div class="sequencer__header">
           <h2 class="sequencer__title">Drum Sequencer</h2>
           <div class="sequencer__controls">
-            <label class="control">
+            <label class="control control--vertical">
               <span class="control__label">BPM</span>
               <input
-                type="number"
-                id="tempoInput"
-                class="control__input"
+                type="range"
+                id="tempoSlider"
+                class="control__slider"
                 min="60"
                 max="180"
                 value="120"
                 aria-label="Beats per minute"
               >
+              <span class="control__value" id="tempoValue">120</span>
             </label>
+            <button id="clearSequencerBtn" class="btn btn--danger" aria-label="Clear sequencer">
+              <span class="icon">✕</span> Clear
+            </button>
           </div>
         </div>
 
