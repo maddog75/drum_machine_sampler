@@ -311,20 +311,23 @@ const Effects = (() => {
       dryGain: audioContext.createGain()
     }
 
-    // Create 4 all-pass filters for phasing
-    for (let i = 0; i < 4; i++) {
+    // Create 6 all-pass filters for more pronounced phasing
+    // Spread across a wider frequency range for more dramatic effect
+    const baseFrequencies = [200, 400, 800, 1600, 3200, 6400]
+    for (let i = 0; i < 6; i++) {
       const filter = audioContext.createBiquadFilter()
       filter.type = 'allpass'
-      filter.frequency.value = 500 + (i * 500)
+      filter.frequency.value = baseFrequencies[i]
+      filter.Q.value = 1.0
       phaserNode.filters.push(filter)
     }
 
-    // Set default values
+    // Set default values with more wet signal for dramatic effect
     phaserNode.lfo.frequency.value = effectsSettings.phaser.rate
-    phaserNode.depth.gain.value = 1000 * effectsSettings.phaser.depth
-    phaserNode.feedback.gain.value = effectsSettings.phaser.feedback
-    phaserNode.wetGain.gain.value = 0.5
-    phaserNode.dryGain.gain.value = 0.5
+    phaserNode.depth.gain.value = 2000 * effectsSettings.phaser.depth  // Increased from 1000
+    phaserNode.feedback.gain.value = 0  // Start with no feedback, controlled separately
+    phaserNode.wetGain.gain.value = 0.7  // More wet signal
+    phaserNode.dryGain.gain.value = 0.3  // Less dry signal
 
     // Connect phaser chain with wet/dry mix
     phaserNode.lfo.connect(phaserNode.depth)
@@ -345,7 +348,7 @@ const Effects = (() => {
     phaserNode.input.connect(phaserNode.dryGain)
     phaserNode.dryGain.connect(phaserNode.output)
 
-    // Optional: Add feedback loop (currently disabled by low gain)
+    // Feedback path: Add resonance (controlled by feedback parameter)
     currentNode.connect(phaserNode.feedback)
     phaserNode.feedback.connect(phaserNode.filters[0])
 
@@ -666,7 +669,7 @@ const Effects = (() => {
 
     if (params.depth !== undefined) {
       effectsSettings.phaser.depth = Math.max(0, Math.min(1, params.depth))
-      phaserNode.depth.gain.value = 1000 * effectsSettings.phaser.depth
+      phaserNode.depth.gain.value = 2000 * effectsSettings.phaser.depth
     }
 
     if (params.feedback !== undefined) {
