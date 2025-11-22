@@ -5,7 +5,7 @@
 
 const LoopPedal = (() => {
   // Private variables
-  const NUM_TRACKS = 6
+  const NUM_TRACKS = 8 // 4 global (0-3) + 4 pattern-specific (4-7)
   let tracks = []
   let mediaStream = null
   let mediaRecorder = null
@@ -598,9 +598,7 @@ const LoopPedal = (() => {
    * @returns {Promise<string>} Base64-encoded WAV data
    */
   const audioBufferToWav = async (audioBuffer) => {
-    // Simplified WAV conversion (would need a proper implementation)
-    // For now, return placeholder
-    return btoa('WAV_PLACEHOLDER')
+    return await WAVEncoder.encodeWAVBase64(audioBuffer)
   }
 
   /**
@@ -609,9 +607,63 @@ const LoopPedal = (() => {
    * @returns {Promise<AudioBuffer>} Audio buffer
    */
   const wavToAudioBuffer = async (wavData) => {
-    // Simplified WAV conversion (would need a proper implementation)
-    // For now, return null
-    return null
+    const context = AudioEngine.getContext()
+    if (!context) return null
+    return await WAVEncoder.decodeWAVBase64(wavData, context)
+  }
+
+  /**
+   * Export pattern-specific tracks (4-7) for saving with a pattern
+   * @returns {Promise<Array>} Array of pattern-specific track data
+   */
+  const exportPatternTracks = async () => {
+    const patternTracksData = []
+
+    for (let i = 4; i < NUM_TRACKS; i++) {
+      const track = tracks[i]
+      if (track.audioBuffer) {
+        const wavData = await audioBufferToWav(track.audioBuffer)
+        patternTracksData.push({
+          index: i,
+          name: track.name,
+          audioData: wavData,
+          volume: track.volume,
+          muted: track.muted,
+          solo: track.solo
+        })
+      }
+    }
+
+    return patternTracksData
+  }
+
+  /**
+   * Import pattern-specific tracks (4-7) when loading a pattern
+   * @param {Array} patternTracksData - Array of pattern-specific track data
+   */
+  const importPatternTracks = async (patternTracksData) => {
+    if (!patternTracksData) return
+
+    // Clear pattern-specific tracks (4-7) first
+    for (let i = 4; i < NUM_TRACKS; i++) {
+      tracks[i].clear()
+    }
+
+    // Load pattern-specific tracks
+    for (const trackData of patternTracksData) {
+      if (trackData.audioData && trackData.index >= 4 && trackData.index < NUM_TRACKS) {
+        const audioBuffer = await wavToAudioBuffer(trackData.audioData)
+        const track = tracks[trackData.index]
+
+        track.audioBuffer = audioBuffer
+        track.name = trackData.name || track.name
+        track.setVolume(trackData.volume || 0.8)
+        track.setMuted(trackData.muted || false)
+        track.setSolo(trackData.solo || false)
+      }
+    }
+
+    emit('patternTracksImported')
   }
 
   // Public API
@@ -637,6 +689,8 @@ const LoopPedal = (() => {
     on,
     off,
     exportData,
-    importData
+    importData,
+    exportPatternTracks,
+    importPatternTracks
   }
 })()

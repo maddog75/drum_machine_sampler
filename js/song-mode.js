@@ -11,6 +11,12 @@ const SongMode = (() => {
   let sectionLoopCount = 0
   let listeners = {}
 
+  // Pattern Bank variables (10 fixed slots)
+  let patternBank = []
+  let currentPatternIndex = 0
+  let queuedPatternIndex = null
+  let chainMode = false
+
   /**
    * Song section structure:
    * {
@@ -33,7 +39,216 @@ const SongMode = (() => {
       }
     })
 
+    // Initialize pattern bank with 10 empty slots
+    initializePatternBank()
+
     console.log('Song Mode initialized')
+  }
+
+  /**
+   * Initialize pattern bank with 10 empty slots
+   */
+  const initializePatternBank = () => {
+    patternBank = []
+    for (let i = 0; i < 10; i++) {
+      patternBank.push({
+        index: i,
+        name: `Pattern ${i + 1}`,
+        pattern: null,
+        tempo: 120,
+        timeSignature: '4/4',
+        repeats: 1,
+        loopTracks: null, // Pattern-specific loop tracks (4-7)
+        isEmpty: true
+      })
+    }
+
+    // Load default pattern into slot 0
+    const defaultPattern = Sequencer.getPattern()
+    if (defaultPattern) {
+      loadPatternToSlot(0, defaultPattern, Sequencer.getTempo(), Sequencer.getTimeSignature())
+    }
+
+    currentPatternIndex = 0
+    emit('patternBankInitialized')
+  }
+
+  /**
+   * Load a pattern into a specific slot
+   * @param {number} index - Slot index (0-9)
+   * @param {Object} pattern - Pattern data
+   * @param {number} tempo - Optional tempo (defaults to current)
+   * @param {string} timeSignature - Optional time signature
+   */
+  const loadPatternToSlot = async (index, pattern, tempo = null, timeSignature = null) => {
+    if (index < 0 || index >= 10) return
+
+    // Export pattern-specific loop tracks (4-7)
+    const loopTracks = await LoopPedal.exportPatternTracks()
+
+    patternBank[index] = {
+      index,
+      name: pattern.name || `Pattern ${index + 1}`,
+      pattern: JSON.parse(JSON.stringify(pattern)), // Deep clone
+      tempo: tempo || Sequencer.getTempo(),
+      timeSignature: timeSignature || Sequencer.getTimeSignature(),
+      repeats: patternBank[index].repeats || 1, // Preserve repeat count
+      loopTracks,
+      isEmpty: false
+    }
+
+    emit('patternSlotUpdated', { index, slot: patternBank[index] })
+  }
+
+  /**
+   * Get pattern from a specific slot
+   * @param {number} index - Slot index (0-9)
+   * @returns {Object} Pattern slot data
+   */
+  const getPatternSlot = (index) => {
+    if (index < 0 || index >= 10) return null
+    return patternBank[index]
+  }
+
+  /**
+   * Clear a pattern slot
+   * @param {number} index - Slot index (0-9)
+   */
+  const clearPatternSlot = (index) => {
+    if (index < 0 || index >= 10) return
+
+    patternBank[index] = {
+      index,
+      name: `Pattern ${index + 1}`,
+      pattern: null,
+      tempo: 120,
+      timeSignature: '4/4',
+      repeats: 1,
+      loopTracks: null,
+      isEmpty: true
+    }
+
+    emit('patternSlotCleared', { index })
+  }
+
+  /**
+   * Set repeat count for a pattern slot
+   * @param {number} index - Slot index (0-9)
+   * @param {number} repeats - Repeat count (1-16)
+   */
+  const setPatternRepeats = (index, repeats) => {
+    if (index < 0 || index >= 10) return
+
+    patternBank[index].repeats = Math.max(1, Math.min(16, repeats))
+    emit('patternRepeatsChanged', { index, repeats: patternBank[index].repeats })
+  }
+
+  /**
+   * Switch to a different pattern (with quantization if playing)
+   * @param {number} index - Slot index (0-9)
+   */
+  const switchToPattern = async (index) => {
+    if (index < 0 || index >= 10) return
+    if (index === currentPatternIndex) return
+
+    const slot = patternBank[index]
+    if (slot.isEmpty) return
+
+    // Save current pattern before switching
+    await saveCurrentPattern()
+
+    // If playing, queue the switch for the next bar
+    if (Sequencer.getIsPlaying()) {
+      queuedPatternIndex = index
+      emit('patternSwitchQueued', { index })
+
+      // Schedule the switch at the next bar
+      const nextBarTime = Sequencer.getNextBarTime()
+      const currentTime = AudioEngine.getCurrentTime()
+      const delay = (nextBarTime - currentTime) * 1000
+
+      setTimeout(() => {
+        if (queuedPatternIndex === index) {
+          applyPatternSwitch(index)
+          queuedPatternIndex = null
+        }
+      }, delay)
+    } else {
+      // Immediate switch when not playing
+      applyPatternSwitch(index)
+    }
+  }
+
+  /**
+   * Save current pattern to its slot
+   */
+  const saveCurrentPattern = async () => {
+    const currentPattern = Sequencer.getPattern()
+    const currentTempo = Sequencer.getTempo()
+    const currentTimeSignature = Sequencer.getTimeSignature()
+
+    await loadPatternToSlot(currentPatternIndex, currentPattern, currentTempo, currentTimeSignature)
+  }
+
+  /**
+   * Apply pattern switch (internal)
+   * @param {number} index - Slot index
+   */
+  const applyPatternSwitch = async (index) => {
+    const slot = patternBank[index]
+    if (!slot || slot.isEmpty) return
+
+    // Load pattern into sequencer
+    Sequencer.loadPattern(slot.pattern)
+    Sequencer.setTempo(slot.tempo)
+    Sequencer.setTimeSignature(slot.timeSignature)
+
+    // Load pattern-specific loop tracks (4-7)
+    if (slot.loopTracks) {
+      await LoopPedal.importPatternTracks(slot.loopTracks)
+    }
+
+    currentPatternIndex = index
+    emit('patternSwitched', { index, slot })
+  }
+
+  /**
+   * Get all pattern slots info
+   * @returns {Array} Array of pattern slot data
+   */
+  const getPatternBank = () => {
+    return patternBank.map(slot => ({
+      index: slot.index,
+      name: slot.name,
+      isEmpty: slot.isEmpty,
+      repeats: slot.repeats,
+      tempo: slot.tempo
+    }))
+  }
+
+  /**
+   * Get current pattern index
+   * @returns {number} Current pattern index
+   */
+  const getCurrentPatternIndex = () => {
+    return currentPatternIndex
+  }
+
+  /**
+   * Set chain mode
+   * @param {boolean} enabled - Enable/disable chain mode
+   */
+  const setChainMode = (enabled) => {
+    chainMode = enabled
+    emit('chainModeChanged', { enabled })
+  }
+
+  /**
+   * Get chain mode state
+   * @returns {boolean} Chain mode enabled
+   */
+  const getChainMode = () => {
+    return chainMode
   }
 
   /**
@@ -382,6 +597,17 @@ const SongMode = (() => {
     duplicateSection,
     exportSong,
     importSong,
+    // Pattern Bank methods
+    loadPatternToSlot,
+    getPatternSlot,
+    clearPatternSlot,
+    setPatternRepeats,
+    switchToPattern,
+    saveCurrentPattern,
+    getPatternBank,
+    getCurrentPatternIndex,
+    setChainMode,
+    getChainMode,
     on,
     off
   }

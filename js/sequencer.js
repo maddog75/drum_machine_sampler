@@ -36,8 +36,8 @@ const Sequencer = (() => {
   const initializeLoopTracks = () => {
     if (!currentPattern) return
 
-    // Add 6 loop tracks if they don't exist
-    for (let i = 1; i <= 6; i++) {
+    // Add 8 loop tracks if they don't exist (4 global + 4 pattern-specific)
+    for (let i = 1; i <= 8; i++) {
       const loopId = `loop${i}`
       if (!currentPattern.pattern[loopId]) {
         currentPattern.pattern[loopId] = new Array(16).fill(0)
@@ -189,7 +189,7 @@ const Sequencer = (() => {
     })
 
     // Play all loop tracks for this step (one-shot, not looping)
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= 8; i++) {
       const loopId = `loop${i}`
       const value = currentPattern.pattern[loopId]?.[step]
       if (value) {
@@ -411,8 +411,8 @@ const Sequencer = (() => {
     const drumInstruments = AudioEngine.getInstruments()
     tracks.push(...drumInstruments)
 
-    // Add loop tracks
-    for (let i = 1; i <= 6; i++) {
+    // Add loop tracks (8 total: 4 global + 4 pattern-specific)
+    for (let i = 1; i <= 8; i++) {
       tracks.push({
         id: `loop${i}`,
         name: `Loop ${i}`

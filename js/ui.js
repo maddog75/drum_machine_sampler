@@ -278,7 +278,7 @@ const UI = (() => {
 
     loopTracksContainer.innerHTML = ''
 
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const trackDiv = document.createElement('div')
       trackDiv.className = 'loop-track'
       trackDiv.dataset.trackIndex = i
