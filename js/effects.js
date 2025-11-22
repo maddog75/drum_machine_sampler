@@ -306,7 +306,9 @@ const Effects = (() => {
       filters: [],
       lfo: audioContext.createOscillator(),
       depth: audioContext.createGain(),
-      feedback: audioContext.createGain()
+      feedback: audioContext.createGain(),
+      wetGain: audioContext.createGain(),
+      dryGain: audioContext.createGain()
     }
 
     // Create 4 all-pass filters for phasing
@@ -321,11 +323,13 @@ const Effects = (() => {
     phaserNode.lfo.frequency.value = effectsSettings.phaser.rate
     phaserNode.depth.gain.value = 1000 * effectsSettings.phaser.depth
     phaserNode.feedback.gain.value = effectsSettings.phaser.feedback
+    phaserNode.wetGain.gain.value = 0.5
+    phaserNode.dryGain.gain.value = 0.5
 
-    // Connect phaser chain
+    // Connect phaser chain with wet/dry mix
     phaserNode.lfo.connect(phaserNode.depth)
 
-    // Connect filters in series
+    // Wet path: Connect filters in series
     let currentNode = phaserNode.input
     for (const filter of phaserNode.filters) {
       currentNode.connect(filter)
@@ -333,10 +337,17 @@ const Effects = (() => {
       currentNode = filter
     }
 
-    // Connect to output with feedback
+    // Connect filtered signal to wet gain and output
+    currentNode.connect(phaserNode.wetGain)
+    phaserNode.wetGain.connect(phaserNode.output)
+
+    // Dry path: Direct connection from input to output
+    phaserNode.input.connect(phaserNode.dryGain)
+    phaserNode.dryGain.connect(phaserNode.output)
+
+    // Optional: Add feedback loop (currently disabled by low gain)
     currentNode.connect(phaserNode.feedback)
-    phaserNode.feedback.connect(phaserNode.input)
-    currentNode.connect(phaserNode.output)
+    phaserNode.feedback.connect(phaserNode.filters[0])
 
     // Start LFO
     phaserNode.lfo.start()
