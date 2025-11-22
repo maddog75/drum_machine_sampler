@@ -115,6 +115,8 @@ const LoopPedal = (() => {
    * @returns {Promise<boolean>} Success status
    */
   const enableMicrophone = async () => {
+    console.log('Attempting to enable microphone...')
+
     try {
       // Check if mediaDevices is available (requires HTTPS or localhost)
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -125,6 +127,7 @@ const LoopPedal = (() => {
         return false
       }
 
+      console.log('Requesting microphone permission...')
       mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -134,6 +137,7 @@ const LoopPedal = (() => {
       })
 
       micEnabled = true
+      console.log('Microphone enabled successfully!')
       emit('microphoneEnabled', true)
       return true
     } catch (error) {
