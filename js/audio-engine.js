@@ -223,6 +223,14 @@ const AudioEngine = (() => {
     return audioBuffers[instrumentId] || null
   }
 
+  /**
+   * Get the master gain node for audio routing
+   * @returns {GainNode} Master gain node
+   */
+  const getMasterGain = () => {
+    return masterGainNode
+  }
+
   // Public API
   return {
     init,
@@ -236,6 +244,7 @@ const AudioEngine = (() => {
     getContext,
     getInstruments,
     getSampleBuffer,
+    getMasterGain,
     isReady
   }
 })()

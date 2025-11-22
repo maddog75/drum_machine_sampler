@@ -36,10 +36,12 @@ const LoopPedal = (() => {
       if (this.gainNode) return // Already initialized
 
       const context = AudioEngine.getContext()
-      if (context) {
+      const masterGain = AudioEngine.getMasterGain()
+      if (context && masterGain) {
         this.gainNode = context.createGain()
         this.gainNode.gain.value = this.muted ? 0 : this.volume
-        this.gainNode.connect(context.destination)
+        // Connect to master gain instead of destination to route through effects
+        this.gainNode.connect(masterGain)
       }
     }
 
