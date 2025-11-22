@@ -15,18 +15,30 @@ const Storage = (() => {
   const saveSession = async () => {
     try {
       const session = {
-        version: '1.0.0',
+        version: '2.0.0', // Incremented for pattern bank support
         timestamp: new Date().toISOString(),
         theme: document.body.dataset.theme || 'dark',
         sequencer: Sequencer.exportPattern(),
-        loopPedal: await LoopPedal.exportData()
+        loopPedal: await LoopPedal.exportData(),
+        patternBank: SongMode.exportPatternBank()
       }
 
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-      console.log('Session saved successfully')
+      const sessionJson = JSON.stringify(session)
+
+      // Check size (localStorage has ~5-10MB limit)
+      const sizeInMB = new Blob([sessionJson]).size / (1024 * 1024)
+      if (sizeInMB > 5) {
+        console.warn(`Session size is ${sizeInMB.toFixed(2)}MB - may exceed localStorage limit`)
+      }
+
+      localStorage.setItem(SESSION_KEY, sessionJson)
+      console.log(`Session saved successfully (${sizeInMB.toFixed(2)}MB)`)
       return true
     } catch (error) {
       console.error('Failed to save session:', error)
+      if (error.name === 'QuotaExceededError') {
+        alert('Session too large to save! Try reducing the number of loop recordings.')
+      }
       return false
     }
   }
@@ -48,14 +60,20 @@ const Storage = (() => {
       // Restore theme
       if (session.theme) {
         document.body.dataset.theme = session.theme
+        UI.updateThemeColors()
       }
 
-      // Restore sequencer
-      if (session.sequencer) {
+      // Restore pattern bank (includes pattern-specific loop tracks)
+      if (session.patternBank) {
+        await SongMode.importPatternBank(session.patternBank)
+      }
+
+      // Restore sequencer (if pattern bank not available, use legacy method)
+      if (session.sequencer && !session.patternBank) {
         Sequencer.importPattern(session.sequencer)
       }
 
-      // Restore loop pedal
+      // Restore loop pedal global tracks (0-3)
       if (session.loopPedal) {
         await LoopPedal.importData(session.loopPedal)
       }
@@ -74,15 +92,20 @@ const Storage = (() => {
   const exportSessionFile = async () => {
     try {
       const session = {
-        version: '1.0.0',
+        version: '2.0.0', // Incremented for pattern bank support
         timestamp: new Date().toISOString(),
         theme: document.body.dataset.theme || 'dark',
         sequencer: Sequencer.exportPattern(),
-        loopPedal: await LoopPedal.exportData()
+        loopPedal: await LoopPedal.exportData(),
+        patternBank: SongMode.exportPatternBank()
       }
 
       const json = JSON.stringify(session, null, 2)
       const blob = new Blob([json], { type: 'application/json' })
+      const sizeInMB = blob.size / (1024 * 1024)
+
+      console.log(`Exporting session (${sizeInMB.toFixed(2)}MB)`)
+
       const url = URL.createObjectURL(blob)
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
@@ -109,29 +132,39 @@ const Storage = (() => {
       const session = JSON.parse(text)
 
       // Validate session data
-      if (!session.version || !session.sequencer) {
-        throw new Error('Invalid session file format')
+      if (!session.version) {
+        throw new Error('Invalid session file format - missing version')
       }
 
       // Restore theme
       if (session.theme) {
         document.body.dataset.theme = session.theme
+        UI.updateThemeColors()
       }
 
-      // Restore sequencer
-      if (session.sequencer) {
+      // Restore pattern bank (v2.0.0+)
+      if (session.patternBank) {
+        await SongMode.importPatternBank(session.patternBank)
+      }
+
+      // Restore sequencer (legacy v1.0.0 or if pattern bank not available)
+      if (session.sequencer && !session.patternBank) {
         Sequencer.importPattern(session.sequencer)
       }
 
-      // Restore loop pedal
+      // Restore loop pedal global tracks (0-3)
       if (session.loopPedal) {
         await LoopPedal.importData(session.loopPedal)
       }
+
+      // Refresh UI
+      UI.renderSequencerGrid()
 
       console.log('Session imported successfully')
       return true
     } catch (error) {
       console.error('Failed to import session:', error)
+      alert('Failed to import session file. It may be corrupted or from an incompatible version.')
       return false
     }
   }

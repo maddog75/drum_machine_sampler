@@ -570,6 +570,72 @@ const SongMode = (() => {
   }
 
   /**
+   * Export pattern bank data
+   * @returns {Object} Pattern bank data
+   */
+  const exportPatternBank = () => {
+    return {
+      patternBank: patternBank.map(slot => ({
+        index: slot.index,
+        name: slot.name,
+        pattern: slot.pattern ? JSON.parse(JSON.stringify(slot.pattern)) : null,
+        tempo: slot.tempo,
+        timeSignature: slot.timeSignature,
+        repeats: slot.repeats,
+        loopTracks: slot.loopTracks, // Pattern-specific loop tracks (already base64)
+        isEmpty: slot.isEmpty
+      })),
+      currentPatternIndex,
+      chainMode
+    }
+  }
+
+  /**
+   * Import pattern bank data
+   * @param {Object} data - Pattern bank data
+   */
+  const importPatternBank = async (data) => {
+    if (!data || !data.patternBank) return
+
+    // Restore pattern bank
+    patternBank = data.patternBank.map(slot => ({
+      index: slot.index,
+      name: slot.name || `Pattern ${slot.index + 1}`,
+      pattern: slot.pattern ? JSON.parse(JSON.stringify(slot.pattern)) : null,
+      tempo: slot.tempo || 120,
+      timeSignature: slot.timeSignature || '4/4',
+      repeats: slot.repeats || 1,
+      loopTracks: slot.loopTracks || null,
+      isEmpty: slot.isEmpty !== false ? true : false
+    }))
+
+    // Restore current pattern index
+    if (data.currentPatternIndex !== undefined) {
+      currentPatternIndex = data.currentPatternIndex
+    }
+
+    // Restore chain mode
+    if (data.chainMode !== undefined) {
+      chainMode = data.chainMode
+    }
+
+    // Load the current pattern into the sequencer
+    const currentSlot = patternBank[currentPatternIndex]
+    if (currentSlot && !currentSlot.isEmpty && currentSlot.pattern) {
+      Sequencer.loadPattern(currentSlot.pattern)
+      Sequencer.setTempo(currentSlot.tempo)
+      Sequencer.setTimeSignature(currentSlot.timeSignature)
+
+      // Load pattern-specific loop tracks (4-7)
+      if (currentSlot.loopTracks) {
+        await LoopPedal.importPatternTracks(currentSlot.loopTracks)
+      }
+    }
+
+    emit('patternBankRestored')
+  }
+
+  /**
    * Start chain mode playback
    */
   const startChainMode = () => {
@@ -713,6 +779,8 @@ const SongMode = (() => {
     getChainMode,
     startChainMode,
     stopChainMode,
+    exportPatternBank,
+    importPatternBank,
     on,
     off
   }
