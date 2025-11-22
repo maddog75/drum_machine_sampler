@@ -1244,9 +1244,18 @@ const UI = (() => {
         button.classList.add('is-empty')
       }
 
-      button.addEventListener('click', () => {
-        if (!slot.isEmpty || index === 0) {
-          // Allow switching to slot 0 even if empty (it's the default)
+      button.addEventListener('click', async () => {
+        // If clicking an empty slot, save current pattern to it
+        if (slot.isEmpty && index !== currentIndex) {
+          const currentPattern = Sequencer.getPattern()
+          const currentTempo = Sequencer.getTempo()
+          const currentTimeSignature = Sequencer.getTimeSignature()
+
+          await SongMode.loadPatternToSlot(index, currentPattern, currentTempo, currentTimeSignature)
+          await SongMode.switchToPattern(index)
+        }
+        // If clicking a non-empty slot, switch to it
+        else if (!slot.isEmpty || index === 0) {
           SongMode.switchToPattern(index)
         }
       })

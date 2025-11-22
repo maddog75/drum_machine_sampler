@@ -708,11 +708,23 @@ const SongMode = (() => {
 
     // Check if we've reached the end
     if (chainCurrentPattern >= 10) {
-      // Chain complete, stop or loop
-      stopChainMode()
-      Sequencer.stop()
-      emit('chainModeCompleted')
-      return
+      // Loop back to the beginning
+      chainCurrentPattern = 0
+
+      // Find first non-empty pattern
+      while (chainCurrentPattern < 10 && patternBank[chainCurrentPattern].isEmpty) {
+        chainCurrentPattern++
+      }
+
+      // If still no pattern found, stop (shouldn't happen if we started)
+      if (chainCurrentPattern >= 10) {
+        stopChainMode()
+        Sequencer.stop()
+        emit('chainModeCompleted')
+        return
+      }
+
+      emit('chainModeLooped')
     }
 
     // Switch to next pattern
