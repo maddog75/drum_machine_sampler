@@ -14,6 +14,7 @@ const Effects = (() => {
   let delayNode = null
   let distortionNode = null
   let compressorNode = null
+  let eqNode = null
   let filterNode = null
   let chorusNode = null
   let phaserNode = null
@@ -45,6 +46,12 @@ const Effects = (() => {
       ratio: 4,
       attack: 0.003,
       release: 0.25
+    },
+    eq: {
+      enabled: false,
+      low: 0,      // -15 to +15 dB
+      mid: 0,      // -15 to +15 dB
+      high: 0      // -15 to +15 dB
     },
     filter: {
       enabled: false,
@@ -82,6 +89,7 @@ const Effects = (() => {
     initDelay()
     initDistortion()
     initCompressor()
+    initEQ()
     initFilter()
     initChorus()
     initPhaser()
@@ -208,6 +216,43 @@ const Effects = (() => {
   }
 
   /**
+   * Initialize 3-band EQ effect
+   */
+  const initEQ = () => {
+    eqNode = {
+      input: audioContext.createGain(),
+      output: audioContext.createGain(),
+      lowBand: audioContext.createBiquadFilter(),
+      midBand: audioContext.createBiquadFilter(),
+      highBand: audioContext.createBiquadFilter()
+    }
+
+    // Configure low band (100 Hz peaking filter)
+    eqNode.lowBand.type = 'peaking'
+    eqNode.lowBand.frequency.value = 100
+    eqNode.lowBand.Q.value = 1.0
+    eqNode.lowBand.gain.value = effectsSettings.eq.low
+
+    // Configure mid band (1000 Hz peaking filter)
+    eqNode.midBand.type = 'peaking'
+    eqNode.midBand.frequency.value = 1000
+    eqNode.midBand.Q.value = 1.0
+    eqNode.midBand.gain.value = effectsSettings.eq.mid
+
+    // Configure high band (10000 Hz peaking filter)
+    eqNode.highBand.type = 'peaking'
+    eqNode.highBand.frequency.value = 10000
+    eqNode.highBand.Q.value = 1.0
+    eqNode.highBand.gain.value = effectsSettings.eq.high
+
+    // Connect EQ chain: input -> low -> mid -> high -> output
+    eqNode.input.connect(eqNode.lowBand)
+    eqNode.lowBand.connect(eqNode.midBand)
+    eqNode.midBand.connect(eqNode.highBand)
+    eqNode.highBand.connect(eqNode.output)
+  }
+
+  /**
    * Initialize filter effect
    */
   const initFilter = () => {
@@ -321,6 +366,9 @@ const Effects = (() => {
       if (compressorNode) {
         compressorNode.disconnect()
       }
+      if (eqNode) {
+        eqNode.output.disconnect()
+      }
       if (filterNode) {
         filterNode.disconnect()
       }
@@ -343,13 +391,19 @@ const Effects = (() => {
       currentNode = compressorNode
     }
 
-    // Add distortion second
+    // Add EQ second (tone shaping)
+    if (effectsSettings.eq.enabled) {
+      currentNode.connect(eqNode.input)
+      currentNode = eqNode.output
+    }
+
+    // Add distortion third
     if (effectsSettings.distortion.enabled) {
       currentNode.connect(distortionNode.input)
       currentNode = distortionNode.output
     }
 
-    // Add filter third
+    // Add filter fourth
     if (effectsSettings.filter.enabled) {
       currentNode.connect(filterNode)
       currentNode = filterNode
@@ -495,6 +549,32 @@ const Effects = (() => {
   }
 
   /**
+   * Set 3-band EQ parameters
+   * @param {Object} params - EQ parameters {low, mid, high} in dB (-15 to +15)
+   */
+  const setEQ = (params) => {
+    if (params.low !== undefined) {
+      effectsSettings.eq.low = Math.max(-15, Math.min(15, params.low))
+      eqNode.lowBand.gain.value = effectsSettings.eq.low
+    }
+
+    if (params.mid !== undefined) {
+      effectsSettings.eq.mid = Math.max(-15, Math.min(15, params.mid))
+      eqNode.midBand.gain.value = effectsSettings.eq.mid
+    }
+
+    if (params.high !== undefined) {
+      effectsSettings.eq.high = Math.max(-15, Math.min(15, params.high))
+      eqNode.highBand.gain.value = effectsSettings.eq.high
+    }
+
+    if (params.enabled !== undefined) {
+      effectsSettings.eq.enabled = params.enabled
+      buildEffectsChain() // Rebuild chain when enabling/disabling
+    }
+  }
+
+  /**
    * Set filter parameters
    * @param {Object} params - Filter parameters {type, frequency, resonance}
    */
@@ -601,6 +681,7 @@ const Effects = (() => {
     if (settings.delay) setDelay(settings.delay)
     if (settings.distortion) setDistortion(settings.distortion)
     if (settings.compressor) setCompressor(settings.compressor)
+    if (settings.eq) setEQ(settings.eq)
     if (settings.filter) setFilter(settings.filter)
     if (settings.chorus) setChorus(settings.chorus)
     if (settings.phaser) setPhaser(settings.phaser)
@@ -637,6 +718,7 @@ const Effects = (() => {
     setDelay,
     setDistortion,
     setCompressor,
+    setEQ,
     setFilter,
     setChorus,
     setPhaser,

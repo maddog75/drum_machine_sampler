@@ -118,6 +118,62 @@ const UI = (() => {
   }
 
   /**
+   * Volume knob drag handling
+   */
+  let draggedKnob = null
+  let dragStartY = 0
+  let dragStartVolume = 0
+
+  const setupVolumeKnobHandlers = () => {
+    const knobs = document.querySelectorAll('.volume-knob-container')
+
+    knobs.forEach(knob => {
+      knob.addEventListener('mousedown', handleKnobMouseDown)
+    })
+  }
+
+  const handleKnobMouseDown = (e) => {
+    e.preventDefault()
+
+    const knob = e.currentTarget
+    const instrument = knob.dataset.instrument
+
+    draggedKnob = knob
+    dragStartY = e.clientY
+    dragStartVolume = AudioEngine.getTrackVolume(instrument)
+
+    document.addEventListener('mousemove', handleKnobMouseMove)
+    document.addEventListener('mouseup', handleKnobMouseUp)
+  }
+
+  const handleKnobMouseMove = (e) => {
+    if (!draggedKnob) return
+
+    const instrument = draggedKnob.dataset.instrument
+    const deltaY = dragStartY - e.clientY  // Inverted: up = increase
+    const volumeChange = deltaY / 100       // 100px = full range (0 to 1)
+    const newVolume = Math.max(0, Math.min(1, dragStartVolume + volumeChange))
+
+    AudioEngine.setTrackVolume(instrument, newVolume)
+    updateKnobRotation(draggedKnob, newVolume)
+  }
+
+  const handleKnobMouseUp = () => {
+    draggedKnob = null
+
+    document.removeEventListener('mousemove', handleKnobMouseMove)
+    document.removeEventListener('mouseup', handleKnobMouseUp)
+  }
+
+  const updateKnobRotation = (knobContainer, volume) => {
+    const rotation = -135 + (volume * 270) // -135° to +135° = 270° range
+    const indicator = knobContainer.querySelector('.volume-knob__indicator')
+    if (indicator) {
+      indicator.style.transform = `rotate(${rotation}deg)`
+    }
+  }
+
+  /**
    * Render track names
    */
   const renderTrackNames = () => {
@@ -129,7 +185,6 @@ const UI = (() => {
     allTracks.forEach(track => {
       const nameDiv = document.createElement('div')
       nameDiv.className = 'track-name'
-      nameDiv.textContent = track.name
       nameDiv.dataset.instrument = track.id
 
       // Add special styling for loop tracks
@@ -137,8 +192,43 @@ const UI = (() => {
         nameDiv.classList.add('track-name--loop')
       }
 
+      // Create label
+      const label = document.createElement('span')
+      label.className = 'track-name__label'
+      label.textContent = track.name
+      nameDiv.appendChild(label)
+
+      // Add volume knob for drum tracks (not loop tracks)
+      if (!track.id.startsWith('loop')) {
+        const knobContainer = document.createElement('div')
+        knobContainer.className = 'volume-knob-container'
+        knobContainer.dataset.instrument = track.id
+
+        const volume = AudioEngine.getTrackVolume(track.id)
+        const rotation = -135 + (volume * 270) // -135° to +135° = 270° range
+
+        knobContainer.innerHTML = `
+          <svg class="volume-knob" viewBox="0 0 50 50">
+            <circle cx="25" cy="25" r="20" class="volume-knob__bg"/>
+            <line
+              x1="25"
+              y1="25"
+              x2="25"
+              y2="10"
+              class="volume-knob__indicator"
+              style="transform: rotate(${rotation}deg)"
+            />
+          </svg>
+        `
+
+        nameDiv.appendChild(knobContainer)
+      }
+
       trackNamesContainer.appendChild(nameDiv)
     })
+
+    // Add knob drag handlers
+    setupVolumeKnobHandlers()
   }
 
   /**
@@ -824,6 +914,188 @@ const UI = (() => {
         const value = parseInt(e.target.value) / 100
         Effects.setDistortion({ tone: value })
         if (distortionToneValue) distortionToneValue.textContent = `${e.target.value}%`
+      })
+    }
+
+    // Compressor controls
+    const compressorEnabled = document.getElementById('compressorEnabled')
+    const compressorThreshold = document.getElementById('compressorThreshold')
+    const compressorThresholdValue = document.getElementById('compressorThresholdValue')
+    const compressorRatio = document.getElementById('compressorRatio')
+    const compressorRatioValue = document.getElementById('compressorRatioValue')
+
+    if (compressorEnabled) {
+      compressorEnabled.addEventListener('change', (e) => {
+        Effects.setCompressor({ enabled: e.target.checked })
+      })
+    }
+
+    if (compressorThreshold) {
+      compressorThreshold.addEventListener('input', (e) => {
+        const value = -100 + parseInt(e.target.value) // 0-100 -> -100 to 0 dB
+        Effects.setCompressor({ threshold: value })
+        if (compressorThresholdValue) compressorThresholdValue.textContent = `${value}dB`
+      })
+    }
+
+    if (compressorRatio) {
+      compressorRatio.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value)
+        Effects.setCompressor({ ratio: value })
+        if (compressorRatioValue) compressorRatioValue.textContent = `${value}:1`
+      })
+    }
+
+    // EQ controls
+    const eqEnabled = document.getElementById('eqEnabled')
+    const eqLow = document.getElementById('eqLow')
+    const eqLowValue = document.getElementById('eqLowValue')
+    const eqMid = document.getElementById('eqMid')
+    const eqMidValue = document.getElementById('eqMidValue')
+    const eqHigh = document.getElementById('eqHigh')
+    const eqHighValue = document.getElementById('eqHighValue')
+
+    if (eqEnabled) {
+      eqEnabled.addEventListener('change', (e) => {
+        Effects.setEQ({ enabled: e.target.checked })
+      })
+    }
+
+    if (eqLow) {
+      eqLow.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value)
+        Effects.setEQ({ low: value })
+        if (eqLowValue) eqLowValue.textContent = `${value >= 0 ? '+' : ''}${value.toFixed(1)}dB`
+      })
+    }
+
+    if (eqMid) {
+      eqMid.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value)
+        Effects.setEQ({ mid: value })
+        if (eqMidValue) eqMidValue.textContent = `${value >= 0 ? '+' : ''}${value.toFixed(1)}dB`
+      })
+    }
+
+    if (eqHigh) {
+      eqHigh.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value)
+        Effects.setEQ({ high: value })
+        if (eqHighValue) eqHighValue.textContent = `${value >= 0 ? '+' : ''}${value.toFixed(1)}dB`
+      })
+    }
+
+    // Filter controls
+    const filterEnabled = document.getElementById('filterEnabled')
+    const filterType = document.getElementById('filterType')
+    const filterFrequency = document.getElementById('filterFrequency')
+    const filterFrequencyValue = document.getElementById('filterFrequencyValue')
+    const filterResonance = document.getElementById('filterResonance')
+    const filterResonanceValue = document.getElementById('filterResonanceValue')
+
+    if (filterEnabled) {
+      filterEnabled.addEventListener('change', (e) => {
+        Effects.setFilter({ enabled: e.target.checked })
+      })
+    }
+
+    if (filterType) {
+      filterType.addEventListener('change', (e) => {
+        Effects.setFilter({ type: e.target.value })
+      })
+    }
+
+    if (filterFrequency) {
+      filterFrequency.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value)
+        Effects.setFilter({ frequency: value })
+        if (filterFrequencyValue) filterFrequencyValue.textContent = `${value}Hz`
+      })
+    }
+
+    if (filterResonance) {
+      filterResonance.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 10  // 0-100 -> 0-10
+        Effects.setFilter({ resonance: value })
+        if (filterResonanceValue) filterResonanceValue.textContent = value.toFixed(1)
+      })
+    }
+
+    // Chorus controls
+    const chorusEnabled = document.getElementById('chorusEnabled')
+    const chorusRate = document.getElementById('chorusRate')
+    const chorusRateValue = document.getElementById('chorusRateValue')
+    const chorusDepth = document.getElementById('chorusDepth')
+    const chorusDepthValue = document.getElementById('chorusDepthValue')
+    const chorusMix = document.getElementById('chorusMix')
+    const chorusMixValue = document.getElementById('chorusMixValue')
+
+    if (chorusEnabled) {
+      chorusEnabled.addEventListener('change', (e) => {
+        Effects.setChorus({ enabled: e.target.checked })
+      })
+    }
+
+    if (chorusRate) {
+      chorusRate.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 10  // 1-100 -> 0.1-10 Hz
+        Effects.setChorus({ rate: value })
+        if (chorusRateValue) chorusRateValue.textContent = `${value.toFixed(1)}Hz`
+      })
+    }
+
+    if (chorusDepth) {
+      chorusDepth.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 10000  // 0-100 -> 0-0.01
+        Effects.setChorus({ depth: value })
+        if (chorusDepthValue) chorusDepthValue.textContent = `${e.target.value}%`
+      })
+    }
+
+    if (chorusMix) {
+      chorusMix.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 100
+        Effects.setChorus({ mix: value })
+        if (chorusMixValue) chorusMixValue.textContent = `${e.target.value}%`
+      })
+    }
+
+    // Phaser controls
+    const phaserEnabled = document.getElementById('phaserEnabled')
+    const phaserRate = document.getElementById('phaserRate')
+    const phaserRateValue = document.getElementById('phaserRateValue')
+    const phaserDepth = document.getElementById('phaserDepth')
+    const phaserDepthValue = document.getElementById('phaserDepthValue')
+    const phaserFeedback = document.getElementById('phaserFeedback')
+    const phaserFeedbackValue = document.getElementById('phaserFeedbackValue')
+
+    if (phaserEnabled) {
+      phaserEnabled.addEventListener('change', (e) => {
+        Effects.setPhaser({ enabled: e.target.checked })
+      })
+    }
+
+    if (phaserRate) {
+      phaserRate.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 10  // 1-100 -> 0.1-10 Hz
+        Effects.setPhaser({ rate: value })
+        if (phaserRateValue) phaserRateValue.textContent = `${value.toFixed(1)}Hz`
+      })
+    }
+
+    if (phaserDepth) {
+      phaserDepth.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 100  // 0-100 -> 0-1
+        Effects.setPhaser({ depth: value })
+        if (phaserDepthValue) phaserDepthValue.textContent = `${e.target.value}%`
+      })
+    }
+
+    if (phaserFeedback) {
+      phaserFeedback.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) / 100  // 0-95 -> 0-0.95
+        Effects.setPhaser({ feedback: value })
+        if (phaserFeedbackValue) phaserFeedbackValue.textContent = `${e.target.value}%`
       })
     }
   }
