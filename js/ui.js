@@ -57,9 +57,11 @@ const UI = (() => {
     renderPresetList()
     renderLoopTracks()
     renderSequencerGrid()
+    renderPatternSlots()
 
     // Set up event listeners
     setupEventListeners()
+    setupPatternSelectorListeners()
 
     // Start visualization loop
     requestAnimationFrame(animationLoop)
@@ -1206,6 +1208,209 @@ const UI = (() => {
         </div>
       </div>
     `).join('')
+  }
+
+  /**
+   * Pattern Selector - Render pattern slots with rotary knobs
+   */
+  const renderPatternSlots = () => {
+    const container = document.getElementById('patternSlots')
+    if (!container) return
+
+    container.innerHTML = ''
+    const patternBank = SongMode.getPatternBank()
+    const currentIndex = SongMode.getCurrentPatternIndex()
+
+    patternBank.forEach((slot, index) => {
+      const slotDiv = document.createElement('div')
+      slotDiv.className = 'pattern-slot'
+      slotDiv.dataset.patternIndex = index
+
+      // Pattern button
+      const button = document.createElement('button')
+      button.className = 'pattern-slot__button'
+      button.dataset.patternIndex = index
+      button.textContent = index + 1
+
+      if (index === currentIndex) {
+        button.classList.add('is-active')
+      }
+      if (slot.isEmpty) {
+        button.classList.add('is-empty')
+      }
+
+      button.addEventListener('click', () => {
+        if (!slot.isEmpty || index === 0) {
+          // Allow switching to slot 0 even if empty (it's the default)
+          SongMode.switchToPattern(index)
+        }
+      })
+
+      slotDiv.appendChild(button)
+
+      // Rotary knob for repeat count
+      const repeats = slot.repeats || 1
+      const rotation = -135 + ((repeats - 1) / 15) * 270 // Map 1-16 to -135° to +135°
+
+      const knobSVG = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      knobSVG.classList.add('pattern-slot__knob')
+      knobSVG.setAttribute('viewBox', '0 0 50 50')
+      knobSVG.dataset.patternIndex = index
+
+      knobSVG.innerHTML = `
+        <circle cx="25" cy="25" r="20" class="pattern-slot__knob-bg"/>
+        <line
+          x1="25"
+          y1="25"
+          x2="25"
+          y2="10"
+          class="pattern-slot__knob-indicator"
+          style="transform: rotate(${rotation}deg)"
+        />
+      `
+
+      slotDiv.appendChild(knobSVG)
+
+      // Repeat count label
+      const repeatLabel = document.createElement('div')
+      repeatLabel.className = 'pattern-slot__repeats'
+      repeatLabel.textContent = `×${repeats}`
+      slotDiv.appendChild(repeatLabel)
+
+      container.appendChild(slotDiv)
+    })
+
+    // Setup knob drag handlers
+    setupPatternKnobHandlers()
+  }
+
+  /**
+   * Pattern knob drag handling
+   */
+  let draggedPatternKnob = null
+  let dragStartPatternY = 0
+  let dragStartRepeats = 1
+
+  const setupPatternKnobHandlers = () => {
+    const knobs = document.querySelectorAll('.pattern-slot__knob')
+
+    knobs.forEach(knob => {
+      knob.addEventListener('mousedown', handlePatternKnobMouseDown)
+    })
+  }
+
+  const handlePatternKnobMouseDown = (e) => {
+    e.preventDefault()
+
+    const knob = e.currentTarget
+    const patternIndex = parseInt(knob.dataset.patternIndex, 10)
+    const slot = SongMode.getPatternSlot(patternIndex)
+
+    draggedPatternKnob = knob
+    dragStartPatternY = e.clientY
+    dragStartRepeats = slot.repeats
+
+    document.addEventListener('mousemove', handlePatternKnobMouseMove)
+    document.addEventListener('mouseup', handlePatternKnobMouseUp)
+  }
+
+  const handlePatternKnobMouseMove = (e) => {
+    if (!draggedPatternKnob) return
+
+    const patternIndex = parseInt(draggedPatternKnob.dataset.patternIndex, 10)
+    const deltaY = dragStartPatternY - e.clientY  // Inverted: up = increase
+    const repeatsChange = Math.floor(deltaY / 10)  // 10px = 1 repeat
+    const newRepeats = Math.max(1, Math.min(16, dragStartRepeats + repeatsChange))
+
+    SongMode.setPatternRepeats(patternIndex, newRepeats)
+    updatePatternKnobRotation(draggedPatternKnob, patternIndex, newRepeats)
+  }
+
+  const handlePatternKnobMouseUp = () => {
+    draggedPatternKnob = null
+
+    document.removeEventListener('mousemove', handlePatternKnobMouseMove)
+    document.removeEventListener('mouseup', handlePatternKnobMouseUp)
+  }
+
+  const updatePatternKnobRotation = (knobSVG, patternIndex, repeats) => {
+    const rotation = -135 + ((repeats - 1) / 15) * 270 // Map 1-16 to -135° to +135°
+    const indicator = knobSVG.querySelector('.pattern-slot__knob-indicator')
+    if (indicator) {
+      indicator.style.transform = `rotate(${rotation}deg)`
+    }
+
+    // Update repeat label
+    const slotDiv = knobSVG.closest('.pattern-slot')
+    const repeatLabel = slotDiv.querySelector('.pattern-slot__repeats')
+    if (repeatLabel) {
+      repeatLabel.textContent = `×${repeats}`
+    }
+  }
+
+  /**
+   * Setup pattern selector event listeners
+   */
+  const setupPatternSelectorListeners = () => {
+    // Chain mode toggle
+    const chainModeToggle = document.getElementById('chainModeToggle')
+    if (chainModeToggle) {
+      chainModeToggle.addEventListener('change', (e) => {
+        SongMode.setChainMode(e.target.checked)
+      })
+    }
+
+    // Listen to SongMode events
+    SongMode.on('patternSwitched', handlePatternSwitched)
+    SongMode.on('patternSwitchQueued', handlePatternSwitchQueued)
+    SongMode.on('patternSlotUpdated', handlePatternSlotUpdated)
+    SongMode.on('patternBankInitialized', renderPatternSlots)
+  }
+
+  /**
+   * Handle pattern switched event
+   */
+  const handlePatternSwitched = (data) => {
+    // Update button states
+    const buttons = document.querySelectorAll('.pattern-slot__button')
+    buttons.forEach((btn, index) => {
+      btn.classList.remove('is-active', 'is-queued')
+      if (index === data.index) {
+        btn.classList.add('is-active')
+      }
+    })
+
+    // Re-render sequencer grid with new pattern
+    renderSequencerGrid()
+  }
+
+  /**
+   * Handle pattern switch queued event
+   */
+  const handlePatternSwitchQueued = (data) => {
+    // Show queued pattern
+    const buttons = document.querySelectorAll('.pattern-slot__button')
+    buttons.forEach((btn, index) => {
+      btn.classList.remove('is-queued')
+      if (index === data.index) {
+        btn.classList.add('is-queued')
+      }
+    })
+  }
+
+  /**
+   * Handle pattern slot updated event
+   */
+  const handlePatternSlotUpdated = (data) => {
+    // Update button state (empty vs filled)
+    const button = document.querySelector(`.pattern-slot__button[data-pattern-index="${data.index}"]`)
+    if (button) {
+      if (data.slot.isEmpty) {
+        button.classList.add('is-empty')
+      } else {
+        button.classList.remove('is-empty')
+      }
+    }
   }
 
   // Public API
