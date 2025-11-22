@@ -288,15 +288,16 @@ const UI = (() => {
           <span class="loop-track__name">Loop ${i + 1}</span>
         </div>
         <div class="loop-track__controls">
-          <button class="btn btn--primary btn-record" data-action="record">● Rec</button>
-          <button class="btn btn--secondary btn-play" data-action="play">▶ Play</button>
-          <button class="btn btn--secondary btn-stop" data-action="stop">■ Stop</button>
-          <button class="btn btn--secondary btn-clear" data-action="clear">✕ Clear</button>
+          <button class="btn btn--primary btn--small btn-record" data-action="record">● Rec</button>
+          <button class="btn btn--secondary btn--small btn-play" data-action="play">▶ Play</button>
+          <button class="btn btn--secondary btn--small btn-stop" data-action="stop">■ Stop</button>
+          <button class="btn btn--secondary btn--small btn-clear" data-action="clear">✕ Clear</button>
         </div>
         <div class="loop-track__waveform"></div>
-        <label class="control">
-          <span class="control__label">Volume</span>
+        <label class="control control--compact">
+          <span class="control__label">Vol</span>
           <input type="range" class="control__slider track-volume" min="0" max="100" value="80">
+          <span class="control__value">80%</span>
         </label>
       `
 
