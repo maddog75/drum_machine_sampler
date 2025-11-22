@@ -259,29 +259,40 @@ const LoopPedal = (() => {
    * @returns {AudioBuffer} Trimmed audio buffer
    */
   const trimSilence = (buffer) => {
-    const threshold = 0.001 // Silence threshold (0.1% of max amplitude) - lowered for better detection
+    const threshold = 0.05 // Silence threshold (5% of max amplitude) - raised to skip background noise
+    const sustainedSamples = 100 // Require sustained audio for this many samples (prevents false triggers from noise)
     const sampleRate = buffer.sampleRate
     const numChannels = buffer.numberOfChannels
 
-    // Find the first sample that exceeds the threshold on any channel
+    // Find the first sustained audio that exceeds the threshold
     let startSample = 0
     let foundStart = false
 
-    for (let i = 0; i < buffer.length; i++) {
-      for (let channel = 0; channel < numChannels; channel++) {
-        const sample = Math.abs(buffer.getChannelData(channel)[i])
-        if (sample > threshold) {
-          startSample = i
-          foundStart = true
-          break
+    for (let i = 0; i < buffer.length - sustainedSamples; i++) {
+      let aboveThresholdCount = 0
+
+      // Check if we have sustained audio for the next N samples
+      for (let j = 0; j < sustainedSamples; j++) {
+        for (let channel = 0; channel < numChannels; channel++) {
+          const sample = Math.abs(buffer.getChannelData(channel)[i + j])
+          if (sample > threshold) {
+            aboveThresholdCount++
+            break // Found loud sample in this position, check next position
+          }
         }
       }
-      if (foundStart) break
+
+      // If we found sustained audio (at least 50% of samples above threshold)
+      if (aboveThresholdCount >= sustainedSamples * 0.5) {
+        startSample = i
+        foundStart = true
+        break
+      }
     }
 
     // If entire buffer is silent, return original
     if (startSample === 0 && !foundStart) {
-      console.warn('No audio detected above threshold - recording may be silent')
+      console.warn('No sustained audio detected above threshold - recording may be silent or very quiet')
       return buffer
     }
 
