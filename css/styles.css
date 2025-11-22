@@ -554,6 +554,15 @@ textarea {
   margin: 0;
 }
 
+.sequencer__controls {
+  display: flex;
+  flex-direction: row;
+  gap: var(--spacing-lg);
+  align-items: flex-start;
+  width: 50%;
+  justify-content: flex-end;
+}
+
 .btn--small {
   padding: 6px 12px;
   font-size: 0.85rem;
@@ -794,7 +803,28 @@ textarea {
 }
 
 .control--vertical {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: var(--spacing-xs);
   align-items: center;
+}
+
+.control--vertical .control__label {
+  grid-column: 1 / -1;
+}
+
+.control--vertical .control__slider {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 80px;
+}
+
+.control--vertical .control__value {
+  grid-column: 2;
+  grid-row: 2;
+  margin-left: 8px;
+  white-space: nowrap;
 }
 
 .control__label {
