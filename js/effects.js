@@ -53,6 +53,9 @@ const Effects = (() => {
     initDelay()
     initDistortion()
 
+    // Build the default effects chain (all bypassed initially)
+    buildEffectsChain()
+
     console.log('Effects initialized')
   }
 
@@ -161,49 +164,60 @@ const Effects = (() => {
   }
 
   /**
-   * Connect effects chain
-   * @param {AudioNode} source - Source node
-   * @param {AudioNode} destination - Destination node
+   * Build/rebuild the effects chain based on current settings
    */
-  const connect = (source, destination) => {
-    if (!audioContext) {
-      console.error('Effects not initialized')
-      return
+  const buildEffectsChain = () => {
+    if (!audioContext) return
+
+    // Disconnect everything first
+    try {
+      inputGain.disconnect()
+      outputGain.disconnect()
+      if (reverbNode) {
+        reverbNode.disconnect()
+        if (reverbNode.wetGain) reverbNode.wetGain.disconnect()
+        if (reverbNode.dryGain) reverbNode.dryGain.disconnect()
+      }
+      if (delayNode) {
+        delayNode.output.disconnect()
+      }
+      if (distortionNode) {
+        distortionNode.output.disconnect()
+      }
+    } catch (e) {
+      // Ignore errors from disconnecting already disconnected nodes
     }
 
-    // Connect source to input
-    source.connect(inputGain)
-
-    // Build effects chain
+    // Build chain: input -> [effects] -> output
     let currentNode = inputGain
 
+    // Add distortion first (if enabled)
+    if (effectsSettings.distortion.enabled) {
+      currentNode.connect(distortionNode.input)
+      currentNode = distortionNode.output
+    }
+
+    // Add delay second (if enabled)
+    if (effectsSettings.delay.enabled) {
+      currentNode.connect(delayNode.input)
+      currentNode = delayNode.output
+    }
+
+    // Add reverb last (if enabled)
     if (effectsSettings.reverb.enabled) {
       currentNode.connect(reverbNode)
       currentNode.connect(reverbNode.dryGain)
       reverbNode.connect(reverbNode.wetGain)
       reverbNode.wetGain.connect(outputGain)
       reverbNode.dryGain.connect(outputGain)
-      currentNode = outputGain
+    } else {
+      // If reverb not enabled, connect current node to output
+      currentNode.connect(outputGain)
     }
 
-    if (effectsSettings.delay.enabled) {
-      const prevNode = currentNode
-      currentNode = delayNode.output
-      prevNode.connect(delayNode.input)
-    }
-
-    if (effectsSettings.distortion.enabled) {
-      const prevNode = currentNode
-      currentNode = distortionNode.output
-      prevNode.connect(distortionNode.input)
-    }
-
-    // Connect to final destination
-    currentNode.connect(destination)
-
-    // If no effects enabled, direct connection
+    // If no effects are enabled, ensure direct connection
     if (!effectsSettings.reverb.enabled && !effectsSettings.delay.enabled && !effectsSettings.distortion.enabled) {
-      inputGain.connect(destination)
+      inputGain.connect(outputGain)
     }
   }
 
@@ -225,6 +239,7 @@ const Effects = (() => {
 
     if (params.enabled !== undefined) {
       effectsSettings.reverb.enabled = params.enabled
+      buildEffectsChain() // Rebuild chain when enabling/disabling
     }
   }
 
@@ -251,6 +266,7 @@ const Effects = (() => {
 
     if (params.enabled !== undefined) {
       effectsSettings.delay.enabled = params.enabled
+      buildEffectsChain() // Rebuild chain when enabling/disabling
     }
   }
 
@@ -272,6 +288,7 @@ const Effects = (() => {
 
     if (params.enabled !== undefined) {
       effectsSettings.distortion.enabled = params.enabled
+      buildEffectsChain() // Rebuild chain when enabling/disabling
     }
   }
 
@@ -331,7 +348,6 @@ const Effects = (() => {
   // Public API
   return {
     init,
-    connect,
     setReverb,
     setDelay,
     setDistortion,

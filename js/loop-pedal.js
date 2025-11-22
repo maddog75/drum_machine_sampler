@@ -229,6 +229,54 @@ const LoopPedal = (() => {
   }
 
   /**
+   * Trim silence from the beginning of an audio buffer
+   * @param {AudioBuffer} buffer - Original audio buffer
+   * @returns {AudioBuffer} Trimmed audio buffer
+   */
+  const trimSilence = (buffer) => {
+    const threshold = 0.01 // Silence threshold (1% of max amplitude)
+    const sampleRate = buffer.sampleRate
+    const numChannels = buffer.numberOfChannels
+
+    // Find the first sample that exceeds the threshold on any channel
+    let startSample = 0
+    let foundStart = false
+
+    for (let i = 0; i < buffer.length; i++) {
+      for (let channel = 0; channel < numChannels; channel++) {
+        const sample = Math.abs(buffer.getChannelData(channel)[i])
+        if (sample > threshold) {
+          startSample = i
+          foundStart = true
+          break
+        }
+      }
+      if (foundStart) break
+    }
+
+    // If entire buffer is silent, return original
+    if (startSample === 0 && !foundStart) {
+      return buffer
+    }
+
+    // Create new buffer with trimmed data
+    const context = AudioEngine.getContext()
+    const newLength = buffer.length - startSample
+    const newBuffer = context.createBuffer(numChannels, newLength, sampleRate)
+
+    // Copy data from start sample to end
+    for (let channel = 0; channel < numChannels; channel++) {
+      const sourceData = buffer.getChannelData(channel)
+      const destData = newBuffer.getChannelData(channel)
+      for (let i = 0; i < newLength; i++) {
+        destData[i] = sourceData[i + startSample]
+      }
+    }
+
+    return newBuffer
+  }
+
+  /**
    * Process recorded audio blob
    * @param {number} trackIndex - Track index
    * @param {Blob} audioBlob - Recorded audio blob
@@ -237,7 +285,10 @@ const LoopPedal = (() => {
     try {
       const arrayBuffer = await audioBlob.arrayBuffer()
       const context = AudioEngine.getContext()
-      const audioBuffer = await context.decodeAudioData(arrayBuffer)
+      let audioBuffer = await context.decodeAudioData(arrayBuffer)
+
+      // Trim silence from the beginning
+      audioBuffer = trimSilence(audioBuffer)
 
       // Store audio buffer in track
       tracks[trackIndex].audioBuffer = audioBuffer
