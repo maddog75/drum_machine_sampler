@@ -105,8 +105,8 @@ const UI = (() => {
    * Update theme colors from CSS custom properties
    */
   const updateThemeColors = () => {
-    const root = document.documentElement
-    const computedStyle = getComputedStyle(root)
+    // Read from body since that's where [data-theme] is applied
+    const computedStyle = getComputedStyle(document.body)
 
     colors.background = computedStyle.getPropertyValue('--color-bg-primary').trim() || '#1a1a1a'
     colors.grid = computedStyle.getPropertyValue('--color-bg-tertiary').trim() || '#3a3a3a'
@@ -664,8 +664,16 @@ const UI = (() => {
     const nextIndex = (currentIndex + 1) % themes.length
 
     document.body.dataset.theme = themes[nextIndex]
-    updateThemeColors()
-    renderSequencerGrid()
+
+    // Force browser to recalculate styles by reading offsetHeight
+    // This ensures CSS changes are applied before we read computed styles
+    document.body.offsetHeight
+
+    // Use setTimeout to ensure styles are fully computed
+    setTimeout(() => {
+      updateThemeColors()
+      renderSequencerGrid()
+    }, 50)
   }
 
   /**

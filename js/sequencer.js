@@ -321,6 +321,32 @@ const Sequencer = (() => {
   }
 
   /**
+   * Get the AudioContext time when the next bar will start
+   * Useful for quantizing loop playback to bar boundaries
+   * @returns {number} AudioContext time for next bar start
+   */
+  const getNextBarTime = () => {
+    if (!isPlaying) {
+      // If not playing, return current time (immediate playback)
+      return AudioEngine.getCurrentTime()
+    }
+
+    // Calculate how many steps until next bar (step 0)
+    // If we're at step 0 and very close to nextNoteTime, wait for the NEXT bar
+    const stepsUntilNextBar = currentStep === 0 ? 16 : (16 - currentStep)
+
+    // Calculate note duration
+    const secondsPerBeat = 60.0 / tempo
+    const noteDuration = secondsPerBeat / 4 // 16th note
+
+    // Calculate time until next bar
+    const timeUntilNextBar = stepsUntilNextBar * noteDuration
+
+    // nextNoteTime is when currentStep will play
+    return nextNoteTime + timeUntilNextBar
+  }
+
+  /**
    * Export pattern data for session save
    * @returns {Object} Pattern data
    */
@@ -370,6 +396,7 @@ const Sequencer = (() => {
     on,
     off,
     getBeatPosition,
+    getNextBarTime,
     exportPattern,
     importPattern
   }

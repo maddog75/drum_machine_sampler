@@ -253,7 +253,7 @@ const LoopPedal = (() => {
   }
 
   /**
-   * Play a loop track
+   * Play a loop track (quantized to next bar)
    * @param {number} trackIndex - Track index (0-5)
    */
   const playTrack = (trackIndex) => {
@@ -262,7 +262,9 @@ const LoopPedal = (() => {
     const track = tracks[trackIndex]
     if (!track.audioBuffer) return
 
-    track.play()
+    // Quantize playback to next bar for musical synchronization
+    const startTime = Sequencer.getNextBarTime()
+    track.play(startTime)
     emit('trackPlaying', trackIndex)
   }
 
@@ -278,11 +280,11 @@ const LoopPedal = (() => {
   }
 
   /**
-   * Play all tracks
+   * Play all tracks (quantized to next bar)
    */
   const playAllTracks = () => {
-    const context = AudioEngine.getContext()
-    const startTime = context.currentTime
+    // Quantize all tracks to start at the next bar
+    const startTime = Sequencer.getNextBarTime()
 
     tracks.forEach((track, index) => {
       if (track.audioBuffer && !track.muted) {
