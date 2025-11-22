@@ -172,7 +172,7 @@ const Effects = (() => {
     // Disconnect everything first
     try {
       inputGain.disconnect()
-      outputGain.disconnect()
+      // Note: Don't disconnect outputGain - it's connected externally to analyser/destination
       if (reverbNode) {
         reverbNode.disconnect()
         if (reverbNode.wetGain) reverbNode.wetGain.disconnect()
