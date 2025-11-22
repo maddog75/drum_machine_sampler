@@ -473,7 +473,8 @@ textarea {
 .control--compact {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .control--compact .control__label {
@@ -482,16 +483,21 @@ textarea {
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  margin-bottom: 2px;
 }
 
 .control--compact .control__slider {
-  height: 4px;
+  height: 6px;
+  width: 100%;
+  margin: 4px 0;
 }
 
 .control--compact .control__value {
   font-size: 0.75rem;
   color: var(--color-text-primary);
   text-align: right;
+  font-weight: 600;
+  margin-top: 2px;
 }
 
 .control__select {
@@ -598,8 +604,8 @@ textarea {
 
 /* Volume Knob */
 .volume-knob-container {
-  width: 30px;
-  height: 30px;
+  width: 25px;
+  height: 25px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -608,8 +614,8 @@ textarea {
 }
 
 .volume-knob {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
 
 .volume-knob__bg {

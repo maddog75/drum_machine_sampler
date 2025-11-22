@@ -7,6 +7,7 @@ const Sequencer = (() => {
   // Private variables
   let currentPattern = null
   let tempo = 120
+  let timeSignature = '4/4'
   let currentStep = 0
   let isPlaying = false
   let schedulerInterval = null
@@ -82,6 +83,25 @@ const Sequencer = (() => {
    */
   const getTempo = () => {
     return tempo
+  }
+
+  /**
+   * Set time signature
+   * @param {string} newTimeSignature - Time signature ('4/4', '3/4', '12/8')
+   */
+  const setTimeSignature = (newTimeSignature) => {
+    if (['4/4', '3/4', '12/8'].includes(newTimeSignature)) {
+      timeSignature = newTimeSignature
+      emit('timeSignatureChanged', timeSignature)
+    }
+  }
+
+  /**
+   * Get current time signature
+   * @returns {string} Current time signature
+   */
+  const getTimeSignature = () => {
+    return timeSignature
   }
 
   /**
@@ -410,6 +430,7 @@ const Sequencer = (() => {
     return {
       pattern: currentPattern,
       tempo,
+      timeSignature,
       currentStep,
       isPlaying
     }
@@ -428,6 +449,10 @@ const Sequencer = (() => {
       tempo = data.tempo
       emit('tempoChanged', tempo)
     }
+    if (data.timeSignature) {
+      timeSignature = data.timeSignature
+      emit('timeSignatureChanged', timeSignature)
+    }
   }
 
   // Public API
@@ -437,6 +462,8 @@ const Sequencer = (() => {
     getPattern,
     setTempo,
     getTempo,
+    setTimeSignature,
+    getTimeSignature,
     toggleStep,
     setStep,
     getStep,

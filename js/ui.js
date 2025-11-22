@@ -22,6 +22,7 @@ const UI = (() => {
   let colors = {
     background: '#1a1a1a',
     grid: '#3a3a3a',
+    groupHighlight: '#252525',  // Slightly lighter for group starts
     active: '#00bcd4',
     highlight: '#00acc1',
     text: '#ffffff'
@@ -110,6 +111,7 @@ const UI = (() => {
 
     colors.background = computedStyle.getPropertyValue('--color-bg-primary').trim() || '#1a1a1a'
     colors.grid = computedStyle.getPropertyValue('--color-bg-tertiary').trim() || '#3a3a3a'
+    colors.groupHighlight = computedStyle.getPropertyValue('--color-bg-secondary').trim() || '#2a2a2a'
     colors.active = computedStyle.getPropertyValue('--color-accent').trim() || '#00bcd4'
     colors.highlight = computedStyle.getPropertyValue('--color-accent-hover').trim() || '#00acc1'
     colors.text = computedStyle.getPropertyValue('--color-text-primary').trim() || '#ffffff'
@@ -326,11 +328,21 @@ const UI = (() => {
     gridCellWidth = width / numSteps
     gridCellHeight = height / numTracks
 
+    // Get time signature to determine group highlighting
+    const timeSignature = Sequencer.getTimeSignature()
+    let groupSize = 4 // Default to 4/4
+    if (timeSignature === '3/4' || timeSignature === '12/8') {
+      groupSize = 3
+    }
+
     // Draw grid and steps
     allTracks.forEach((track, row) => {
       for (let col = 0; col < numSteps; col++) {
         const x = col * gridCellWidth
         const y = row * gridCellHeight
+
+        // Check if this is the first column of a group
+        const isGroupStart = col % groupSize === 0
 
         // Check if step is active
         const isActive = pattern.pattern[track.id]?.[col] === 1
@@ -338,11 +350,16 @@ const UI = (() => {
         // Highlight current step
         const isHighlighted = col === currentHighlightedStep
 
-        // Draw cell background
+        // Draw cell background with group highlighting
         if (isActive) {
           ctx.fillStyle = isHighlighted ? colors.highlight : colors.active
+        } else if (isHighlighted) {
+          ctx.fillStyle = colors.grid
+        } else if (isGroupStart) {
+          // Lighter background for first column of each group
+          ctx.fillStyle = colors.groupHighlight
         } else {
-          ctx.fillStyle = isHighlighted ? colors.grid : colors.background
+          ctx.fillStyle = colors.background
         }
         ctx.fillRect(x + 2, y + 2, gridCellWidth - 4, gridCellHeight - 4)
 
@@ -454,6 +471,15 @@ const UI = (() => {
           tempoValue.textContent = tempo
         }
         updateTempoDisplay()
+      })
+    }
+
+    // Time signature selector
+    const timeSignature = document.getElementById('timeSignature')
+    if (timeSignature) {
+      timeSignature.addEventListener('change', (e) => {
+        Sequencer.setTimeSignature(e.target.value)
+        renderSequencerGrid()  // Re-render to update group highlighting
       })
     }
 
