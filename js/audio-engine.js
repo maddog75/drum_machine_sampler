@@ -9,6 +9,7 @@ const AudioEngine = (() => {
   let masterGainNode = null
   let analyserNode = null
   let audioBuffers = {}
+  let trackGainNodes = {}  // Per-track gain nodes for volume control
   let isInitialized = false
 
   // Drum sample configurations (TR-808 samples)
@@ -49,6 +50,14 @@ const AudioEngine = (() => {
       // Create master gain node
       masterGainNode = audioContext.createGain()
       masterGainNode.gain.value = 0.8
+
+      // Create per-track gain nodes for each drum instrument
+      for (const instrumentId of Object.keys(DRUM_SAMPLES)) {
+        const trackGain = audioContext.createGain()
+        trackGain.gain.value = 0.8  // Default volume
+        trackGain.connect(masterGainNode)
+        trackGainNodes[instrumentId] = trackGain
+      }
 
       // Create analyser for visualizations
       analyserNode = audioContext.createAnalyser()
@@ -152,9 +161,13 @@ const AudioEngine = (() => {
     const gainNode = audioContext.createGain()
     gainNode.gain.value = Math.max(0, Math.min(1, velocity))
 
-    // Connect nodes
+    // Connect nodes: source -> velocity gain -> track gain -> master gain
     source.connect(gainNode)
-    gainNode.connect(masterGainNode)
+    if (trackGainNodes[instrument]) {
+      gainNode.connect(trackGainNodes[instrument])
+    } else {
+      gainNode.connect(masterGainNode)  // Fallback if track gain not found
+    }
 
     // Schedule playback
     const startTime = time || audioContext.currentTime
@@ -169,6 +182,29 @@ const AudioEngine = (() => {
     if (masterGainNode) {
       masterGainNode.gain.value = Math.max(0, Math.min(1, volume))
     }
+  }
+
+  /**
+   * Set individual track volume
+   * @param {string} instrument - Instrument ID
+   * @param {number} volume - Volume level (0.0 - 1.0)
+   */
+  const setTrackVolume = (instrument, volume) => {
+    if (trackGainNodes[instrument]) {
+      trackGainNodes[instrument].gain.value = Math.max(0, Math.min(1, volume))
+    }
+  }
+
+  /**
+   * Get individual track volume
+   * @param {string} instrument - Instrument ID
+   * @returns {number} Current volume level (0.0 - 1.0)
+   */
+  const getTrackVolume = (instrument) => {
+    if (trackGainNodes[instrument]) {
+      return trackGainNodes[instrument].gain.value
+    }
+    return 0.8  // Default volume
   }
 
   /**
@@ -239,6 +275,8 @@ const AudioEngine = (() => {
     generateDrumSamples,
     playDrum,
     setMasterVolume,
+    setTrackVolume,
+    getTrackVolume,
     getCurrentTime,
     getAnalyser,
     getContext,

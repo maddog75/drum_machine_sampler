@@ -51,69 +51,6 @@
     </div>
   </div>
 
-  <!-- Effects Panel -->
-  <div id="effects-panel" class="help hidden" role="dialog" aria-labelledby="effects-title" aria-modal="true">
-    <div class="help__content">
-      <button class="help__close" aria-label="Close effects" onclick="document.getElementById('effects-panel').classList.add('hidden')">×</button>
-      <h2 id="effects-title" class="help__title">Audio Effects</h2>
-      <div class="help__sections">
-        <section class="help__section">
-          <h3>Reverb</h3>
-          <label class="control">
-            <input type="checkbox" id="reverbEnabled"> Enable
-          </label>
-          <label class="control">
-            <span class="control__label">Wet/Dry Mix</span>
-            <input type="range" id="reverbWetDry" class="control__slider" min="0" max="100" value="30">
-            <span class="control__value" id="reverbWetDryValue">30%</span>
-          </label>
-          <label class="control">
-            <span class="control__label">Decay Time</span>
-            <input type="range" id="reverbDecay" class="control__slider" min="1" max="100" value="20">
-            <span class="control__value" id="reverbDecayValue">2.0s</span>
-          </label>
-        </section>
-        <section class="help__section">
-          <h3>Delay</h3>
-          <label class="control">
-            <input type="checkbox" id="delayEnabled"> Enable
-          </label>
-          <label class="control">
-            <span class="control__label">Wet/Dry Mix</span>
-            <input type="range" id="delayWetDry" class="control__slider" min="0" max="100" value="50">
-            <span class="control__value" id="delayWetDryValue">50%</span>
-          </label>
-          <label class="control">
-            <span class="control__label">Delay Time</span>
-            <input type="range" id="delayTime" class="control__slider" min="1" max="500" value="37">
-            <span class="control__value" id="delayTimeValue">0.375s</span>
-          </label>
-          <label class="control">
-            <span class="control__label">Feedback</span>
-            <input type="range" id="delayFeedback" class="control__slider" min="0" max="90" value="40">
-            <span class="control__value" id="delayFeedbackValue">40%</span>
-          </label>
-        </section>
-        <section class="help__section">
-          <h3>Distortion</h3>
-          <label class="control">
-            <input type="checkbox" id="distortionEnabled"> Enable
-          </label>
-          <label class="control">
-            <span class="control__label">Amount</span>
-            <input type="range" id="distortionAmount" class="control__slider" min="0" max="100" value="50">
-            <span class="control__value" id="distortionAmountValue">50%</span>
-          </label>
-          <label class="control">
-            <span class="control__label">Tone</span>
-            <input type="range" id="distortionTone" class="control__slider" min="0" max="100" value="50">
-            <span class="control__value" id="distortionToneValue">50%</span>
-          </label>
-        </section>
-      </div>
-    </div>
-  </div>
-
   <!-- Song Mode Panel -->
   <div id="song-mode-panel" class="help hidden" role="dialog" aria-labelledby="song-mode-title" aria-modal="true">
     <div class="help__content">
@@ -201,10 +138,205 @@
         </div>
       </aside>
 
+      <!-- Audio Filters Panel -->
+      <aside class="audio-filters" role="complementary" aria-label="Audio effects">
+        <h2 class="audio-filters__title">Audio Effects</h2>
+        <div class="effects-grid">
+          <!-- Reverb -->
+          <div class="effect-module">
+            <div class="effect-module__header">
+              <h3 class="effect-module__title">Reverb</h3>
+              <label class="toggle">
+                <input type="checkbox" id="reverbEnabled">
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+            <div class="effect-module__controls">
+              <label class="control control--compact">
+                <span class="control__label">Mix</span>
+                <input type="range" id="reverbWetDry" class="control__slider" min="0" max="100" value="30">
+                <span class="control__value" id="reverbWetDryValue">30%</span>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Decay</span>
+                <input type="range" id="reverbDecay" class="control__slider" min="1" max="100" value="20">
+                <span class="control__value" id="reverbDecayValue">2.0s</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Delay -->
+          <div class="effect-module">
+            <div class="effect-module__header">
+              <h3 class="effect-module__title">Delay</h3>
+              <label class="toggle">
+                <input type="checkbox" id="delayEnabled">
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+            <div class="effect-module__controls">
+              <label class="control control--compact">
+                <span class="control__label">Mix</span>
+                <input type="range" id="delayWetDry" class="control__slider" min="0" max="100" value="50">
+                <span class="control__value" id="delayWetDryValue">50%</span>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Time</span>
+                <input type="range" id="delayTime" class="control__slider" min="1" max="500" value="37">
+                <span class="control__value" id="delayTimeValue">0.375s</span>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Feedback</span>
+                <input type="range" id="delayFeedback" class="control__slider" min="0" max="90" value="40">
+                <span class="control__value" id="delayFeedbackValue">40%</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Distortion -->
+          <div class="effect-module">
+            <div class="effect-module__header">
+              <h3 class="effect-module__title">Distortion</h3>
+              <label class="toggle">
+                <input type="checkbox" id="distortionEnabled">
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+            <div class="effect-module__controls">
+              <label class="control control--compact">
+                <span class="control__label">Amount</span>
+                <input type="range" id="distortionAmount" class="control__slider" min="0" max="100" value="50">
+                <span class="control__value" id="distortionAmountValue">50%</span>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Tone</span>
+                <input type="range" id="distortionTone" class="control__slider" min="0" max="100" value="50">
+                <span class="control__value" id="distortionToneValue">50%</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Compressor -->
+          <div class="effect-module">
+            <div class="effect-module__header">
+              <h3 class="effect-module__title">Compressor</h3>
+              <label class="toggle">
+                <input type="checkbox" id="compressorEnabled">
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+            <div class="effect-module__controls">
+              <label class="control control--compact">
+                <span class="control__label">Threshold</span>
+                <input type="range" id="compressorThreshold" class="control__slider" min="0" max="100" value="76">
+                <span class="control__value" id="compressorThresholdValue">-24dB</span>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Ratio</span>
+                <input type="range" id="compressorRatio" class="control__slider" min="1" max="20" value="4">
+                <span class="control__value" id="compressorRatioValue">4:1</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Filter -->
+          <div class="effect-module">
+            <div class="effect-module__header">
+              <h3 class="effect-module__title">Filter</h3>
+              <label class="toggle">
+                <input type="checkbox" id="filterEnabled">
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+            <div class="effect-module__controls">
+              <label class="control control--compact">
+                <span class="control__label">Type</span>
+                <select id="filterType" class="control__select">
+                  <option value="lowpass">Lowpass</option>
+                  <option value="highpass">Highpass</option>
+                  <option value="bandpass">Bandpass</option>
+                </select>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Cutoff</span>
+                <input type="range" id="filterFrequency" class="control__slider" min="20" max="20000" value="1000">
+                <span class="control__value" id="filterFrequencyValue">1000Hz</span>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Resonance</span>
+                <input type="range" id="filterResonance" class="control__slider" min="0" max="100" value="10">
+                <span class="control__value" id="filterResonanceValue">1.0</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Chorus -->
+          <div class="effect-module">
+            <div class="effect-module__header">
+              <h3 class="effect-module__title">Chorus</h3>
+              <label class="toggle">
+                <input type="checkbox" id="chorusEnabled">
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+            <div class="effect-module__controls">
+              <label class="control control--compact">
+                <span class="control__label">Rate</span>
+                <input type="range" id="chorusRate" class="control__slider" min="1" max="100" value="15">
+                <span class="control__value" id="chorusRateValue">1.5Hz</span>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Depth</span>
+                <input type="range" id="chorusDepth" class="control__slider" min="0" max="100" value="20">
+                <span class="control__value" id="chorusDepthValue">20%</span>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Mix</span>
+                <input type="range" id="chorusMix" class="control__slider" min="0" max="100" value="50">
+                <span class="control__value" id="chorusMixValue">50%</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Phaser -->
+          <div class="effect-module">
+            <div class="effect-module__header">
+              <h3 class="effect-module__title">Phaser</h3>
+              <label class="toggle">
+                <input type="checkbox" id="phaserEnabled">
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+            <div class="effect-module__controls">
+              <label class="control control--compact">
+                <span class="control__label">Rate</span>
+                <input type="range" id="phaserRate" class="control__slider" min="1" max="100" value="5">
+                <span class="control__value" id="phaserRateValue">0.5Hz</span>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Depth</span>
+                <input type="range" id="phaserDepth" class="control__slider" min="0" max="100" value="50">
+                <span class="control__value" id="phaserDepthValue">50%</span>
+              </label>
+              <label class="control control--compact">
+                <span class="control__label">Feedback</span>
+                <input type="range" id="phaserFeedback" class="control__slider" min="0" max="95" value="50">
+                <span class="control__value" id="phaserFeedbackValue">50%</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </aside>
+
       <!-- Center Panel: Drum Sequencer -->
       <section class="sequencer" role="region" aria-label="Drum sequencer">
         <div class="sequencer__header">
-          <h2 class="sequencer__title">Drum Sequencer</h2>
+          <div class="sequencer__title-bar">
+            <h2 class="sequencer__title">Drum Sequencer</h2>
+            <button id="clearSequencerBtn" class="btn btn--danger btn--small" aria-label="Clear sequencer">
+              <span class="icon">✕</span> Clear
+            </button>
+          </div>
           <div class="sequencer__controls">
             <label class="control control--vertical">
               <span class="control__label">BPM</span>
@@ -219,9 +351,6 @@
               >
               <span class="control__value" id="tempoValue">120</span>
             </label>
-            <button id="clearSequencerBtn" class="btn btn--danger" aria-label="Clear sequencer">
-              <span class="icon">✕</span> Clear
-            </button>
           </div>
         </div>
 

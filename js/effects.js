@@ -13,6 +13,10 @@ const Effects = (() => {
   let reverbNode = null
   let delayNode = null
   let distortionNode = null
+  let compressorNode = null
+  let filterNode = null
+  let chorusNode = null
+  let phaserNode = null
   let inputGain = null
   let outputGain = null
 
@@ -34,6 +38,31 @@ const Effects = (() => {
       enabled: false,
       amount: 0.5,
       tone: 0.5
+    },
+    compressor: {
+      enabled: false,
+      threshold: -24,
+      ratio: 4,
+      attack: 0.003,
+      release: 0.25
+    },
+    filter: {
+      enabled: false,
+      type: 'lowpass',
+      frequency: 1000,
+      resonance: 1
+    },
+    chorus: {
+      enabled: false,
+      rate: 1.5,
+      depth: 0.002,
+      mix: 0.5
+    },
+    phaser: {
+      enabled: false,
+      rate: 0.5,
+      depth: 0.5,
+      feedback: 0.5
     }
   }
 
@@ -52,6 +81,10 @@ const Effects = (() => {
     initReverb()
     initDelay()
     initDistortion()
+    initCompressor()
+    initFilter()
+    initChorus()
+    initPhaser()
 
     // Build the default effects chain (all bypassed initially)
     buildEffectsChain()
@@ -164,6 +197,107 @@ const Effects = (() => {
   }
 
   /**
+   * Initialize compressor effect
+   */
+  const initCompressor = () => {
+    compressorNode = audioContext.createDynamicsCompressor()
+    compressorNode.threshold.value = effectsSettings.compressor.threshold
+    compressorNode.ratio.value = effectsSettings.compressor.ratio
+    compressorNode.attack.value = effectsSettings.compressor.attack
+    compressorNode.release.value = effectsSettings.compressor.release
+  }
+
+  /**
+   * Initialize filter effect
+   */
+  const initFilter = () => {
+    filterNode = audioContext.createBiquadFilter()
+    filterNode.type = effectsSettings.filter.type
+    filterNode.frequency.value = effectsSettings.filter.frequency
+    filterNode.Q.value = effectsSettings.filter.resonance
+  }
+
+  /**
+   * Initialize chorus effect
+   */
+  const initChorus = () => {
+    chorusNode = {
+      input: audioContext.createGain(),
+      output: audioContext.createGain(),
+      delay: audioContext.createDelay(1.0),
+      lfo: audioContext.createOscillator(),
+      depth: audioContext.createGain(),
+      wetGain: audioContext.createGain(),
+      dryGain: audioContext.createGain()
+    }
+
+    // Set default values
+    chorusNode.lfo.frequency.value = effectsSettings.chorus.rate
+    chorusNode.depth.gain.value = effectsSettings.chorus.depth
+    chorusNode.delay.delayTime.value = 0.02  // Base delay 20ms
+    chorusNode.wetGain.gain.value = effectsSettings.chorus.mix
+    chorusNode.dryGain.gain.value = 1 - effectsSettings.chorus.mix
+
+    // Connect chorus chain
+    chorusNode.lfo.connect(chorusNode.depth)
+    chorusNode.depth.connect(chorusNode.delay.delayTime)
+    chorusNode.input.connect(chorusNode.delay)
+    chorusNode.delay.connect(chorusNode.wetGain)
+    chorusNode.wetGain.connect(chorusNode.output)
+    chorusNode.input.connect(chorusNode.dryGain)
+    chorusNode.dryGain.connect(chorusNode.output)
+
+    // Start LFO
+    chorusNode.lfo.start()
+  }
+
+  /**
+   * Initialize phaser effect
+   */
+  const initPhaser = () => {
+    phaserNode = {
+      input: audioContext.createGain(),
+      output: audioContext.createGain(),
+      filters: [],
+      lfo: audioContext.createOscillator(),
+      depth: audioContext.createGain(),
+      feedback: audioContext.createGain()
+    }
+
+    // Create 4 all-pass filters for phasing
+    for (let i = 0; i < 4; i++) {
+      const filter = audioContext.createBiquadFilter()
+      filter.type = 'allpass'
+      filter.frequency.value = 500 + (i * 500)
+      phaserNode.filters.push(filter)
+    }
+
+    // Set default values
+    phaserNode.lfo.frequency.value = effectsSettings.phaser.rate
+    phaserNode.depth.gain.value = 1000 * effectsSettings.phaser.depth
+    phaserNode.feedback.gain.value = effectsSettings.phaser.feedback
+
+    // Connect phaser chain
+    phaserNode.lfo.connect(phaserNode.depth)
+
+    // Connect filters in series
+    let currentNode = phaserNode.input
+    for (const filter of phaserNode.filters) {
+      currentNode.connect(filter)
+      phaserNode.depth.connect(filter.frequency)
+      currentNode = filter
+    }
+
+    // Connect to output with feedback
+    currentNode.connect(phaserNode.feedback)
+    phaserNode.feedback.connect(phaserNode.input)
+    currentNode.connect(phaserNode.output)
+
+    // Start LFO
+    phaserNode.lfo.start()
+  }
+
+  /**
    * Build/rebuild the effects chain based on current settings
    */
   const buildEffectsChain = () => {
@@ -184,6 +318,18 @@ const Effects = (() => {
       if (distortionNode) {
         distortionNode.output.disconnect()
       }
+      if (compressorNode) {
+        compressorNode.disconnect()
+      }
+      if (filterNode) {
+        filterNode.disconnect()
+      }
+      if (chorusNode) {
+        chorusNode.output.disconnect()
+      }
+      if (phaserNode) {
+        phaserNode.output.disconnect()
+      }
     } catch (e) {
       // Ignore errors from disconnecting already disconnected nodes
     }
@@ -191,19 +337,43 @@ const Effects = (() => {
     // Build chain: input -> [effects] -> output
     let currentNode = inputGain
 
-    // Add distortion first (if enabled)
+    // Add compressor first (dynamics control)
+    if (effectsSettings.compressor.enabled) {
+      currentNode.connect(compressorNode)
+      currentNode = compressorNode
+    }
+
+    // Add distortion second
     if (effectsSettings.distortion.enabled) {
       currentNode.connect(distortionNode.input)
       currentNode = distortionNode.output
     }
 
-    // Add delay second (if enabled)
+    // Add filter third
+    if (effectsSettings.filter.enabled) {
+      currentNode.connect(filterNode)
+      currentNode = filterNode
+    }
+
+    // Add chorus fourth
+    if (effectsSettings.chorus.enabled) {
+      currentNode.connect(chorusNode.input)
+      currentNode = chorusNode.output
+    }
+
+    // Add phaser fifth
+    if (effectsSettings.phaser.enabled) {
+      currentNode.connect(phaserNode.input)
+      currentNode = phaserNode.output
+    }
+
+    // Add delay sixth
     if (effectsSettings.delay.enabled) {
       currentNode.connect(delayNode.input)
       currentNode = delayNode.output
     }
 
-    // Add reverb last (if enabled)
+    // Add reverb last (always connect output)
     if (effectsSettings.reverb.enabled) {
       currentNode.connect(reverbNode)
       currentNode.connect(reverbNode.dryGain)
@@ -216,7 +386,8 @@ const Effects = (() => {
     }
 
     // If no effects are enabled, ensure direct connection
-    if (!effectsSettings.reverb.enabled && !effectsSettings.delay.enabled && !effectsSettings.distortion.enabled) {
+    const anyEffectEnabled = Object.values(effectsSettings).some(effect => effect.enabled)
+    if (!anyEffectEnabled) {
       inputGain.connect(outputGain)
     }
   }
@@ -293,8 +464,118 @@ const Effects = (() => {
   }
 
   /**
+   * Set compressor parameters
+   * @param {Object} params - Compressor parameters {threshold, ratio, attack, release}
+   */
+  const setCompressor = (params) => {
+    if (params.threshold !== undefined) {
+      effectsSettings.compressor.threshold = Math.max(-100, Math.min(0, params.threshold))
+      compressorNode.threshold.value = effectsSettings.compressor.threshold
+    }
+
+    if (params.ratio !== undefined) {
+      effectsSettings.compressor.ratio = Math.max(1, Math.min(20, params.ratio))
+      compressorNode.ratio.value = effectsSettings.compressor.ratio
+    }
+
+    if (params.attack !== undefined) {
+      effectsSettings.compressor.attack = Math.max(0, Math.min(1, params.attack))
+      compressorNode.attack.value = effectsSettings.compressor.attack
+    }
+
+    if (params.release !== undefined) {
+      effectsSettings.compressor.release = Math.max(0, Math.min(1, params.release))
+      compressorNode.release.value = effectsSettings.compressor.release
+    }
+
+    if (params.enabled !== undefined) {
+      effectsSettings.compressor.enabled = params.enabled
+      buildEffectsChain() // Rebuild chain when enabling/disabling
+    }
+  }
+
+  /**
+   * Set filter parameters
+   * @param {Object} params - Filter parameters {type, frequency, resonance}
+   */
+  const setFilter = (params) => {
+    if (params.type !== undefined) {
+      effectsSettings.filter.type = params.type
+      filterNode.type = params.type
+    }
+
+    if (params.frequency !== undefined) {
+      effectsSettings.filter.frequency = Math.max(20, Math.min(20000, params.frequency))
+      filterNode.frequency.value = effectsSettings.filter.frequency
+    }
+
+    if (params.resonance !== undefined) {
+      effectsSettings.filter.resonance = Math.max(0.0001, Math.min(100, params.resonance))
+      filterNode.Q.value = effectsSettings.filter.resonance
+    }
+
+    if (params.enabled !== undefined) {
+      effectsSettings.filter.enabled = params.enabled
+      buildEffectsChain() // Rebuild chain when enabling/disabling
+    }
+  }
+
+  /**
+   * Set chorus parameters
+   * @param {Object} params - Chorus parameters {rate, depth, mix}
+   */
+  const setChorus = (params) => {
+    if (params.rate !== undefined) {
+      effectsSettings.chorus.rate = Math.max(0.1, Math.min(10, params.rate))
+      chorusNode.lfo.frequency.value = effectsSettings.chorus.rate
+    }
+
+    if (params.depth !== undefined) {
+      effectsSettings.chorus.depth = Math.max(0, Math.min(0.01, params.depth))
+      chorusNode.depth.gain.value = effectsSettings.chorus.depth
+    }
+
+    if (params.mix !== undefined) {
+      effectsSettings.chorus.mix = Math.max(0, Math.min(1, params.mix))
+      chorusNode.wetGain.gain.value = effectsSettings.chorus.mix
+      chorusNode.dryGain.gain.value = 1 - effectsSettings.chorus.mix
+    }
+
+    if (params.enabled !== undefined) {
+      effectsSettings.chorus.enabled = params.enabled
+      buildEffectsChain() // Rebuild chain when enabling/disabling
+    }
+  }
+
+  /**
+   * Set phaser parameters
+   * @param {Object} params - Phaser parameters {rate, depth, feedback}
+   */
+  const setPhaser = (params) => {
+    if (params.rate !== undefined) {
+      effectsSettings.phaser.rate = Math.max(0.1, Math.min(10, params.rate))
+      phaserNode.lfo.frequency.value = effectsSettings.phaser.rate
+    }
+
+    if (params.depth !== undefined) {
+      effectsSettings.phaser.depth = Math.max(0, Math.min(1, params.depth))
+      phaserNode.depth.gain.value = 1000 * effectsSettings.phaser.depth
+    }
+
+    if (params.feedback !== undefined) {
+      effectsSettings.phaser.feedback = Math.max(0, Math.min(0.95, params.feedback))
+      phaserNode.feedback.gain.value = effectsSettings.phaser.feedback
+    }
+
+    if (params.enabled !== undefined) {
+      effectsSettings.phaser.enabled = params.enabled
+      buildEffectsChain() // Rebuild chain when enabling/disabling
+    }
+  }
+
+  /**
    * Toggle effect on/off
-   * @param {string} effectName - Name of effect ('reverb', 'delay', 'distortion')
+   * @param {string} effectName - Name of effect ('reverb', 'delay', 'distortion', etc.)
    * @param {boolean} enabled - Enable/disable
    */
   const toggleEffect = (effectName, enabled) => {
@@ -319,6 +600,10 @@ const Effects = (() => {
     if (settings.reverb) setReverb(settings.reverb)
     if (settings.delay) setDelay(settings.delay)
     if (settings.distortion) setDistortion(settings.distortion)
+    if (settings.compressor) setCompressor(settings.compressor)
+    if (settings.filter) setFilter(settings.filter)
+    if (settings.chorus) setChorus(settings.chorus)
+    if (settings.phaser) setPhaser(settings.phaser)
   }
 
   /**
@@ -351,6 +636,10 @@ const Effects = (() => {
     setReverb,
     setDelay,
     setDistortion,
+    setCompressor,
+    setFilter,
+    setChorus,
+    setPhaser,
     toggleEffect,
     getSettings,
     loadSettings,

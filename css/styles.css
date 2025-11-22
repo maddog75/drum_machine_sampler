@@ -4,11 +4,11 @@
 
 :root {
   /* Spacing */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
+  --spacing-xs: 0.15rem;
+  --spacing-sm: 0.25rem;
+  --spacing-md: 0.5rem;
+  --spacing-lg: 0.75rem;
+  --spacing-xl: 1rem;
 
   /* Border Radius */
   --radius-sm: 4px;
@@ -233,7 +233,7 @@ textarea {
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
   min-width: 44px;
-  min-height: 44px;
+  min-height: 30px;
 }
 
 .btn:hover {
