@@ -259,7 +259,7 @@ const LoopPedal = (() => {
    * @returns {AudioBuffer} Trimmed audio buffer
    */
   const trimSilence = (buffer) => {
-    const threshold = 0.01 // Silence threshold (1% of max amplitude)
+    const threshold = 0.001 // Silence threshold (0.1% of max amplitude) - lowered for better detection
     const sampleRate = buffer.sampleRate
     const numChannels = buffer.numberOfChannels
 
@@ -281,8 +281,13 @@ const LoopPedal = (() => {
 
     // If entire buffer is silent, return original
     if (startSample === 0 && !foundStart) {
+      console.warn('No audio detected above threshold - recording may be silent')
       return buffer
     }
+
+    // Calculate time trimmed
+    const trimmedTime = (startSample / sampleRate * 1000).toFixed(1)
+    console.log(`Trimmed ${trimmedTime}ms of silence from recording start (${startSample} samples)`)
 
     // Create new buffer with trimmed data
     const context = AudioEngine.getContext()
