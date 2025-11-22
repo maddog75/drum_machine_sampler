@@ -27,12 +27,18 @@ const LoopPedal = (() => {
       this.solo = false
       this.isPlaying = false
       this.isRecording = false
+    }
 
-      // Create gain node for this track
+    /**
+     * Initialize audio nodes (call after AudioContext is ready)
+     */
+    initAudioNodes() {
+      if (this.gainNode) return // Already initialized
+
       const context = AudioEngine.getContext()
       if (context) {
         this.gainNode = context.createGain()
-        this.gainNode.gain.value = this.volume
+        this.gainNode.gain.value = this.muted ? 0 : this.volume
         this.gainNode.connect(context.destination)
       }
     }
@@ -66,6 +72,10 @@ const LoopPedal = (() => {
 
       const context = AudioEngine.getContext()
       if (!context) return
+
+      // Ensure audio nodes are initialized
+      this.initAudioNodes()
+      if (!this.gainNode) return
 
       this.source = context.createBufferSource()
       this.source.buffer = this.audioBuffer
