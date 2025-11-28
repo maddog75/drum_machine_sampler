@@ -37,3 +37,4 @@ build/
 # Audio exports (user generated, too large for git)
 exports/
 downloads/
+.playwright-mcp/
