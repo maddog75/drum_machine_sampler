@@ -2,6 +2,8 @@
 
 A browser-based music creation tool designed for children ages 8-12, featuring a professional drum sequencer, sample recorder, and audio effects - all with zero dependencies.
 
+**[Try the Live Demo](https://maddog75.github.io/drum_machine_sampler/)**
+
 ![Screenshot](screenshot.png)
 
 ## Features
@@ -95,7 +97,7 @@ No build tools required! Simply:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/web_drum_machine_and_loop_pedal.git
+git clone https://github.com/maddog75/drum_machine_sampler.git
 
 # Open in browser
 open index.html
@@ -105,7 +107,7 @@ For development details, see [CLAUDE.md](CLAUDE.md).
 
 ## License
 
-MIT License - Feel free to use, modify, and share for educational purposes.
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
 ---
 
