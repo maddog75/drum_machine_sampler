@@ -457,13 +457,13 @@ const Sequencer = (() => {
 
   /**
    * Get beat position for display
-   * @returns {string} Beat position (e.g., "1.1", "2.3")
+   * @returns {string} Beat position (e.g., "1.1.1", "2.3.4") - pattern.beat.subdivision
    */
   const getBeatPosition = () => {
-    const bar = 1 // We only have 1 bar (16 steps)
+    const pattern = (SongMode.getCurrentPatternIndex() + 1) // 1-based pattern number
     const beat = Math.floor(currentStep / 4) + 1
     const subdivision = (currentStep % 4) + 1
-    return `${bar}.${beat}.${subdivision}`
+    return `${pattern}.${beat}.${subdivision}`
   }
 
   /**
