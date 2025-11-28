@@ -20,6 +20,7 @@ const LoopPedal = (() => {
       this.index = index
       this.name = `Loop ${index + 1}`
       this.audioBuffer = null
+      this.webmBlob = null  // Store compressed WebM/Opus blob for efficient storage
       this.source = null
       this.gainNode = null
       this.volume = 0.8
@@ -27,6 +28,7 @@ const LoopPedal = (() => {
       this.solo = false
       this.isPlaying = false
       this.isRecording = false
+      this.startTrim = 0  // Trim from start of sample in seconds (0-5s)
     }
 
     /**
@@ -63,10 +65,17 @@ const LoopPedal = (() => {
       this.solo = solo
     }
 
+    setStartTrim(seconds) {
+      // Clamp between 0 and 5 seconds, also cap at buffer duration if available
+      const maxTrim = this.audioBuffer ? Math.min(5, this.audioBuffer.duration - 0.1) : 5
+      this.startTrim = Math.max(0, Math.min(maxTrim, seconds))
+    }
+
     clear() {
       this.stop()
       this.audioBuffer = null
       this.isRecording = false
+      this.startTrim = 0  // Reset trim when clearing
     }
 
     play(startTime = null, loop = true) {
@@ -104,7 +113,7 @@ const LoopPedal = (() => {
       }
 
       const time = startTime || context.currentTime
-      this.source.start(time)
+      this.source.start(time, this.startTrim)  // Apply start trim offset
       this.isPlaying = loop // Only mark as playing if looping
     }
 
@@ -216,7 +225,8 @@ const LoopPedal = (() => {
     // Create MediaRecorder
     try {
       mediaRecorder = new MediaRecorder(mediaStream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 96000  // 96 kbps for excellent quality with smaller file size
       })
 
       mediaRecorder.ondataavailable = (event) => {
@@ -331,8 +341,9 @@ const LoopPedal = (() => {
       // Trim silence from the beginning
       audioBuffer = trimSilence(audioBuffer)
 
-      // Store audio buffer in track
+      // Store both AudioBuffer (for playback) and WebM blob (for storage)
       tracks[trackIndex].audioBuffer = audioBuffer
+      tracks[trackIndex].webmBlob = audioBlob  // Keep compressed format for efficient storage
 
       emit('recordingProcessed', {
         trackIndex,
@@ -474,6 +485,18 @@ const LoopPedal = (() => {
   }
 
   /**
+   * Set track start trim (for trimming sample intro)
+   * @param {number} trackIndex - Track index (0-7)
+   * @param {number} seconds - Trim amount in seconds (0-5)
+   */
+  const setTrackStartTrim = (trackIndex, seconds) => {
+    if (trackIndex < 0 || trackIndex >= NUM_TRACKS) return
+
+    tracks[trackIndex].setStartTrim(seconds)
+    emit('trackStartTrimChanged', { trackIndex, startTrim: seconds })
+  }
+
+  /**
    * Get track info
    * @param {number} trackIndex - Track index (0-5)
    * @returns {Object} Track information
@@ -491,7 +514,8 @@ const LoopPedal = (() => {
       muted: track.muted,
       solo: track.solo,
       isPlaying: track.isPlaying,
-      isRecording: track.isRecording
+      isRecording: track.isRecording,
+      startTrim: track.startTrim
     }
   }
 
@@ -548,16 +572,31 @@ const LoopPedal = (() => {
 
     for (let i = 0; i < tracks.length; i++) {
       const track = tracks[i]
-      if (track.audioBuffer) {
-        // Convert AudioBuffer to base64-encoded WAV
+      if (track.webmBlob) {
+        // Convert WebM blob to base64 (compressed format - ~90% smaller than WAV)
+        const webmData = await webmBlobToBase64(track.webmBlob)
+        tracksData.push({
+          index: i,
+          name: track.name,
+          audioData: webmData,
+          format: 'webm',  // Mark as compressed WebM format
+          volume: track.volume,
+          muted: track.muted,
+          solo: track.solo,
+          startTrim: track.startTrim
+        })
+      } else if (track.audioBuffer) {
+        // Fallback: Convert AudioBuffer to base64-encoded WAV (legacy)
         const wavData = await audioBufferToWav(track.audioBuffer)
         tracksData.push({
           index: i,
           name: track.name,
           audioData: wavData,
+          format: 'wav',  // Mark as uncompressed WAV format
           volume: track.volume,
           muted: track.muted,
-          solo: track.solo
+          solo: track.solo,
+          startTrim: track.startTrim
         })
       }
     }
@@ -578,14 +617,27 @@ const LoopPedal = (() => {
     // Load tracks
     for (const trackData of data.tracks) {
       if (trackData.audioData) {
-        const audioBuffer = await wavToAudioBuffer(trackData.audioData)
         const track = tracks[trackData.index]
+        let audioBuffer = null
+
+        // Handle both WebM (new compressed format) and WAV (legacy format)
+        if (trackData.format === 'webm') {
+          // New compressed format: Convert Base64 to WebM blob, then decode to AudioBuffer
+          const webmBlob = base64ToWebmBlob(trackData.audioData)
+          audioBuffer = await webmBlobToAudioBuffer(webmBlob)
+          track.webmBlob = webmBlob  // Store compressed blob for efficient re-saving
+        } else {
+          // Legacy WAV format (backward compatibility)
+          audioBuffer = await wavToAudioBuffer(trackData.audioData)
+          // Note: webmBlob will be null, so next save will keep WAV format until re-recorded
+        }
 
         track.audioBuffer = audioBuffer
         track.name = trackData.name || track.name
         track.setVolume(trackData.volume || 0.8)
         track.setMuted(trackData.muted || false)
         track.setSolo(trackData.solo || false)
+        track.setStartTrim(trackData.startTrim || 0)
       }
     }
 
@@ -593,7 +645,48 @@ const LoopPedal = (() => {
   }
 
   /**
-   * Convert AudioBuffer to WAV format (base64)
+   * Convert WebM blob to Base64 (compressed format for efficient storage)
+   * @param {Blob} webmBlob - WebM/Opus blob
+   * @returns {Promise<string>} Base64-encoded WebM data
+   */
+  const webmBlobToBase64 = async (webmBlob) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result.split(',')[1]) // Remove data:audio/webm;base64, prefix
+      reader.onerror = reject
+      reader.readAsDataURL(webmBlob)
+    })
+  }
+
+  /**
+   * Convert Base64 WebM data to Blob
+   * @param {string} base64Data - Base64-encoded WebM data
+   * @returns {Blob} WebM blob
+   */
+  const base64ToWebmBlob = (base64Data) => {
+    const binaryString = atob(base64Data)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return new Blob([bytes], { type: 'audio/webm;codecs=opus' })
+  }
+
+  /**
+   * Decode WebM blob to AudioBuffer for playback
+   * @param {Blob} webmBlob - WebM/Opus blob
+   * @returns {Promise<AudioBuffer>} Audio buffer
+   */
+  const webmBlobToAudioBuffer = async (webmBlob) => {
+    const context = AudioEngine.getContext()
+    if (!context) return null
+
+    const arrayBuffer = await webmBlob.arrayBuffer()
+    return await context.decodeAudioData(arrayBuffer)
+  }
+
+  /**
+   * Convert AudioBuffer to WAV format (base64) - Legacy for compatibility
    * @param {AudioBuffer} audioBuffer - Audio buffer to convert
    * @returns {Promise<string>} Base64-encoded WAV data
    */
@@ -602,7 +695,7 @@ const LoopPedal = (() => {
   }
 
   /**
-   * Convert WAV data (base64) to AudioBuffer
+   * Convert WAV data (base64) to AudioBuffer - Legacy for compatibility
    * @param {string} wavData - Base64-encoded WAV data
    * @returns {Promise<AudioBuffer>} Audio buffer
    */
@@ -621,12 +714,26 @@ const LoopPedal = (() => {
 
     for (let i = 4; i < NUM_TRACKS; i++) {
       const track = tracks[i]
-      if (track.audioBuffer) {
+      if (track.webmBlob) {
+        // Prefer compressed WebM format (~90% smaller than WAV)
+        const webmData = await webmBlobToBase64(track.webmBlob)
+        patternTracksData.push({
+          index: i,
+          name: track.name,
+          audioData: webmData,
+          format: 'webm',  // Mark as compressed WebM format
+          volume: track.volume,
+          muted: track.muted,
+          solo: track.solo
+        })
+      } else if (track.audioBuffer) {
+        // Fallback: Convert AudioBuffer to WAV (legacy compatibility)
         const wavData = await audioBufferToWav(track.audioBuffer)
         patternTracksData.push({
           index: i,
           name: track.name,
           audioData: wavData,
+          format: 'wav',  // Mark as uncompressed WAV format
           volume: track.volume,
           muted: track.muted,
           solo: track.solo
@@ -652,8 +759,20 @@ const LoopPedal = (() => {
     // Load pattern-specific tracks
     for (const trackData of patternTracksData) {
       if (trackData.audioData && trackData.index >= 4 && trackData.index < NUM_TRACKS) {
-        const audioBuffer = await wavToAudioBuffer(trackData.audioData)
         const track = tracks[trackData.index]
+        let audioBuffer = null
+
+        // Handle both WebM (new compressed format) and WAV (legacy format)
+        if (trackData.format === 'webm') {
+          // New compressed format: Convert Base64 to WebM blob, then decode to AudioBuffer
+          const webmBlob = base64ToWebmBlob(trackData.audioData)
+          audioBuffer = await webmBlobToAudioBuffer(webmBlob)
+          track.webmBlob = webmBlob  // Store compressed blob for efficient re-saving
+        } else {
+          // Legacy WAV format (backward compatibility)
+          audioBuffer = await wavToAudioBuffer(trackData.audioData)
+          // Note: webmBlob will be null, so next save will keep WAV format until re-recorded
+        }
 
         track.audioBuffer = audioBuffer
         track.name = trackData.name || track.name
@@ -683,6 +802,7 @@ const LoopPedal = (() => {
     setTrackVolume,
     setTrackMuted,
     setTrackSolo,
+    setTrackStartTrim,
     getTrackInfo,
     getAllTracksInfo,
     getMicInputLevel,

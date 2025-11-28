@@ -8,8 +8,10 @@ const Sequencer = (() => {
   let currentPattern = null
   let tempo = 120
   let timeSignature = '4/4'
+  let stepCount = 16 // Number of steps in the sequence (4-48)
   let currentStep = 0
   let isPlaying = false
+  let isPaused = false  // Track if paused (vs stopped) for resume functionality
   let schedulerInterval = null
   let nextNoteTime = 0
   let scheduleAheadTime = 0.1 // How far ahead to schedule (100ms)
@@ -37,21 +39,59 @@ const Sequencer = (() => {
     if (!currentPattern) return
 
     // Add 8 loop tracks if they don't exist (4 global + 4 pattern-specific)
+    // Always create with max size (48 steps)
     for (let i = 1; i <= 8; i++) {
       const loopId = `loop${i}`
       if (!currentPattern.pattern[loopId]) {
-        currentPattern.pattern[loopId] = new Array(16).fill(0)
+        currentPattern.pattern[loopId] = new Array(48).fill(0)
+      } else {
+        // Ensure existing arrays are at least 48 steps
+        while (currentPattern.pattern[loopId].length < 48) {
+          currentPattern.pattern[loopId].push(0)
+        }
       }
     }
   }
 
   /**
    * Load a pattern into the sequencer
-   * @param {Object} pattern - Pattern object from presets
+   * @param {Object} pattern - Pattern object from presets (can be null for empty patterns)
    */
   const loadPattern = (pattern) => {
+    // Handle null patterns (empty slots)
+    if (!pattern) {
+      // Create empty pattern structure
+      const instruments = AudioEngine.getInstruments()
+      currentPattern = {
+        name: 'Empty Pattern',
+        tempo: tempo, // Keep current tempo
+        pattern: {}
+      }
+
+      // Initialize all instrument tracks with empty 48-step arrays
+      instruments.forEach(instrument => {
+        currentPattern.pattern[instrument.id] = new Array(48).fill(0)
+      })
+
+      // Initialize loop tracks
+      initializeLoopTracks()
+
+      emit('patternLoaded', currentPattern)
+      return
+    }
+
     currentPattern = JSON.parse(JSON.stringify(pattern)) // Deep clone
     tempo = pattern.tempo
+
+    // Extend all instrument tracks to 48 steps (max size)
+    const instruments = AudioEngine.getInstruments()
+    instruments.forEach(instrument => {
+      if (currentPattern.pattern[instrument.id]) {
+        while (currentPattern.pattern[instrument.id].length < 48) {
+          currentPattern.pattern[instrument.id].push(0)
+        }
+      }
+    })
 
     // Ensure loop tracks exist in the loaded pattern
     initializeLoopTracks()
@@ -65,7 +105,7 @@ const Sequencer = (() => {
    * @returns {Object} Current pattern
    */
   const getPattern = () => {
-    return currentPattern
+    return JSON.parse(JSON.stringify(currentPattern))
   }
 
   /**
@@ -102,6 +142,23 @@ const Sequencer = (() => {
    */
   const getTimeSignature = () => {
     return timeSignature
+  }
+
+  /**
+   * Set step count
+   * @param {number} newStepCount - Number of steps (4-48)
+   */
+  const setStepCount = (newStepCount) => {
+    stepCount = Math.max(4, Math.min(48, newStepCount))
+    emit('stepCountChanged', stepCount)
+  }
+
+  /**
+   * Get current step count
+   * @returns {number} Current step count
+   */
+  const getStepCount = () => {
+    return stepCount
   }
 
   /**
@@ -215,14 +272,14 @@ const Sequencer = (() => {
     nextNoteTime += noteDuration
 
     currentStep++
-    if (currentStep >= 16) {
+    if (currentStep >= stepCount) {
       currentStep = 0
       emit('barCompleted')  // Emit event when bar completes
     }
   }
 
   /**
-   * Start playback
+   * Start playback (or resume if paused)
    */
   const play = () => {
     if (isPlaying) return
@@ -231,7 +288,13 @@ const Sequencer = (() => {
     AudioEngine.resume()
 
     isPlaying = true
-    currentStep = 0
+
+    // Only reset to beginning if not resuming from pause
+    if (!isPaused) {
+      currentStep = 0
+    }
+    isPaused = false
+
     nextNoteTime = AudioEngine.getCurrentTime()
 
     // Start the JavaScript scheduler
@@ -241,12 +304,13 @@ const Sequencer = (() => {
   }
 
   /**
-   * Pause playback
+   * Pause playback (preserves position for resume)
    */
   const pause = () => {
     if (!isPlaying) return
 
     isPlaying = false
+    isPaused = true  // Mark as paused so play() will resume
 
     // Stop the scheduler
     if (schedulerInterval) {
@@ -262,6 +326,7 @@ const Sequencer = (() => {
    */
   const stop = () => {
     pause()
+    isPaused = false  // Clear paused state so next play starts from beginning
     currentStep = 0
     emit('playbackStopped')
   }
@@ -306,6 +371,14 @@ const Sequencer = (() => {
       }
     })
 
+    // Also clear all loop/sample tracks (loop1-loop8)
+    for (let i = 1; i <= 8; i++) {
+      const loopTrackId = `loop${i}`
+      if (currentPattern.pattern[loopTrackId]) {
+        currentPattern.pattern[loopTrackId].fill(0)
+      }
+    }
+
     emit('patternCleared')
   }
 
@@ -330,7 +403,7 @@ const Sequencer = (() => {
     const instruments = AudioEngine.getInstruments()
     instruments.forEach(instrument => {
       if (currentPattern.pattern[instrument.id]) {
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < stepCount; i++) {
           // 30% chance of a hit
           currentPattern.pattern[instrument.id][i] = Math.random() < 0.3 ? 1 : 0
         }
@@ -388,7 +461,7 @@ const Sequencer = (() => {
 
     // Calculate how many steps until next bar (step 0)
     // If we're at step 0 and very close to nextNoteTime, wait for the NEXT bar
-    const stepsUntilNextBar = currentStep === 0 ? 16 : (16 - currentStep)
+    const stepsUntilNextBar = currentStep === 0 ? stepCount : (stepCount - currentStep)
 
     // Calculate note duration
     const secondsPerBeat = 60.0 / tempo
@@ -414,9 +487,11 @@ const Sequencer = (() => {
 
     // Add loop tracks (8 total: 4 global + 4 pattern-specific)
     for (let i = 1; i <= 8; i++) {
+      const isGlobal = i <= 4
+      const name = isGlobal ? `Global Sample ${i}` : `Sample ${i - 4}`
       tracks.push({
         id: `loop${i}`,
-        name: `Loop ${i}`
+        name: name
       })
     }
 
@@ -432,6 +507,7 @@ const Sequencer = (() => {
       pattern: currentPattern,
       tempo,
       timeSignature,
+      stepCount,
       currentStep,
       isPlaying
     }
@@ -443,7 +519,21 @@ const Sequencer = (() => {
    */
   const importPattern = (data) => {
     if (data.pattern) {
-      currentPattern = data.pattern
+      currentPattern = JSON.parse(JSON.stringify(data.pattern)) // Deep clone
+
+      // Extend all instrument tracks to 48 steps (max size)
+      const instruments = AudioEngine.getInstruments()
+      instruments.forEach(instrument => {
+        if (currentPattern.pattern[instrument.id]) {
+          while (currentPattern.pattern[instrument.id].length < 48) {
+            currentPattern.pattern[instrument.id].push(0)
+          }
+        }
+      })
+
+      // Ensure loop tracks exist in the imported pattern
+      initializeLoopTracks()
+
       emit('patternLoaded', currentPattern)
     }
     if (data.tempo) {
@@ -453,6 +543,10 @@ const Sequencer = (() => {
     if (data.timeSignature) {
       timeSignature = data.timeSignature
       emit('timeSignatureChanged', timeSignature)
+    }
+    if (data.stepCount !== undefined) {
+      stepCount = data.stepCount
+      emit('stepCountChanged', stepCount)
     }
   }
 
@@ -465,6 +559,8 @@ const Sequencer = (() => {
     getTempo,
     setTimeSignature,
     getTimeSignature,
+    setStepCount,
+    getStepCount,
     toggleStep,
     setStep,
     getStep,

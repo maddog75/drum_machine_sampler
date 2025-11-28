@@ -67,6 +67,11 @@
     if (Storage.hasSession()) {
       const loadSession = confirm('Load your previous session?')
       if (loadSession) {
+        // Ensure audio engine is initialized before loading audio samples
+        await AudioEngine.init()
+        await AudioEngine.loadDrumSamples()
+
+        // Load the session
         await Storage.loadSession()
         UI.renderSequencerGrid()
       }

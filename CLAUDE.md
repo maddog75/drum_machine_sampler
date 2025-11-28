@@ -46,11 +46,15 @@ A browser-based music creation tool designed for children ages 8-12, featuring a
 js/
 ├── main.js           # Application entry, initialization, orchestration
 ├── audio-engine.js   # Web Audio API wrapper, AudioContext management
-├── sequencer.js      # Drum machine, 16-step sequencer, scheduling
-├── loop-pedal.js     # Multi-track recording, overdub, playback
+├── sequencer.js      # Drum machine, variable-step sequencer, scheduling
+├── loop-pedal.js     # 8-track sample recording with start trim, playback
 ├── ui.js             # UI rendering, canvas drawing, DOM updates
 ├── storage.js        # Session save/load, WAV export, localStorage
-└── presets.js        # Drum patterns, riff patterns, default data
+├── presets.js        # 100+ drum patterns across multiple genres
+├── effects.js        # Audio effects chain (reverb, delay, distortion, etc.)
+├── song-mode.js      # Pattern bank (10 slots) and chain mode playback
+├── visualizations.js # Real-time audio waveform and VU meter visualizations
+└── wav-encoder.js    # WAV file encoding for audio export
 ```
 
 ### Audio Architecture
@@ -116,59 +120,102 @@ Portrait (Mobile/Tablet):
 ### 1. Drum Machine
 
 #### Specifications
-- **Instruments**: 12-16 drum sounds
-  - Kick (2 variations)
-  - Snare (2 variations)
-  - Hi-hat closed, open
+- **Instruments**: 16 drum sounds
+  - Kick 1, Kick 2
+  - Snare 1, Snare 2
+  - Hi-Hat Closed, Hi-Hat Open
   - Clap, Snap
-  - Tom high, mid, low
+  - Tom High, Tom Mid, Tom Low
   - Crash, Ride
-  - Percussion (shaker, cowbell, etc.)
-- **Sequencer**: 16-step grid
-- **Tracks**: 12-16 simultaneous tracks
-- **Tempo Range**: 60-180 BPM
-- **Presets**: 10-15 drum patterns
+  - Shaker, Cowbell, Rimshot
+- **Sequencer**: Variable step grid (4-48 steps, default 16)
+- **Time Signatures**: 4/4, 3/4, 12/8
+- **Tracks**: 16 drum tracks + 8 sample tracks (24 total)
+- **Tempo Range**: 60-200 BPM
+- **Presets**: 100+ drum patterns (2 variations each across 50+ genres)
+- **Pattern Bank**: 10 pattern slots with chain mode for song arrangement
 
-#### Preset Patterns
-1. Basic Rock (120 BPM)
-2. Pop Beat (115 BPM)
-3. Hip-Hop (90 BPM)
-4. House (128 BPM)
-5. Funk (110 BPM)
-6. Disco (120 BPM)
-7. Reggae (80 BPM)
-8. Trap (140 BPM)
-9. Jazz Swing (120 BPM)
-10. Latin (100 BPM)
-11. Dubstep (140 BPM)
-12. Drum & Bass (174 BPM)
-13. Techno (135 BPM)
-14. Breakbeat (130 BPM)
-15. Chill Hop (85 BPM)
+#### Transport Controls
+- **Play/Pause**: Toggle with resume from paused position
+- **Stop**: Reset to beginning
+- **Rewind/Fast Forward**: Navigate patterns
 
-### 2. Loop Pedal
+#### Preset Pattern Genres
+Basic Rock, Pop Beat, Hip-Hop, House, Funk Groove, Disco, Reggae, Trap, Jazz Swing, Latin, Dubstep, Drum & Bass, Techno, Breakbeat, Chill Hop, Trance, Punk Rock, Afrobeat, Samba, Bossa Nova, UK Garage, Grunge, Moombahton, Future Bass, Waltz, Metal, Shuffle, Minimal, Progressive House, Electro, Deep House, Industrial, Jungle, Ballad, Hardcore, Ambient, Breakcore, Country, Ska, Trip-Hop, Cumbia, Salsa, R&B, Synthwave, Grime, Boom Bap, Acid House, Hard Rock, New Wave, Post-Rock, Footwork, Vaporwave, Downtempo, UK Bass, Juke, Lo-Fi, Bassline, Indie Rock, EDM Big Room, Psytrance, Experimental (and more)
+
+### 2. Sample Recorder (Loop Pedal)
 
 #### Specifications
-- **Tracks**: 4-6 simultaneous loop tracks
-- **Input**: Microphone recording
+- **Tracks**: 8 sample tracks
+  - 4 Global samples (shared across all patterns)
+  - 4 Pattern-specific samples (unique per pattern slot)
+- **Input**: Microphone recording with auto gap removal
 - **Features**:
-  - Record, Play, Stop, Clear per track
-  - Overdub (layer new audio on existing)
-  - Individual volume control
-  - Mute/Solo per track
-  - Visual waveform display
-  - Loop synchronization to sequencer beat
+  - Record, Play, Clear per track
+  - **Start Trim slider** (0-5 seconds) for trimming sample intro
+  - Individual volume control per track
+  - Samples can be triggered from the sequencer grid
+  - Visual duration display (shows effective duration after trim)
+  - Samples saved/loaded with sessions (WebM compressed format)
+
+#### Start Trim Feature
+- Slider control (0.0s - 5.0s, step 0.1s) to trim unwanted audio from sample start
+- Applied during preview playback and sequencer triggering
+- Persisted with session save/load
+- Duration display shows effective length after trim
 
 #### Recording Pipeline
 ```
 Microphone → getUserMedia() →
 MediaStreamAudioSourceNode →
 GainNode (input level) →
-MediaRecorder (recording) +
-AudioContext.destination (monitoring)
+MediaRecorder (WebM/Opus) →
+AudioBuffer (for playback)
 ```
 
-### 3. Visual Themes
+### 3. Audio Effects
+
+#### Available Effects
+All effects can be enabled/disabled individually with adjustable parameters:
+
+1. **Reverb**
+   - Mix: 0-100%
+   - Decay: 0.1-5.0s
+
+2. **Delay**
+   - Mix: 0-100%
+   - Time: 0-1s
+   - Feedback: 0-90%
+
+3. **Distortion**
+   - Amount: 0-100%
+   - Tone: 0-100%
+
+4. **Compressor**
+   - Threshold: -100 to 0 dB
+   - Ratio: 1:1 to 20:1
+
+5. **EQ (3-band)**
+   - Low (100Hz): -12 to +12 dB
+   - Mid (1kHz): -12 to +12 dB
+   - High (10kHz): -12 to +12 dB
+
+6. **Filter**
+   - Type: Lowpass, Highpass, Bandpass
+   - Cutoff: 20-20000 Hz
+   - Resonance: 0.1-20
+
+7. **Chorus**
+   - Rate: 0.1-10 Hz
+   - Depth: 0-100%
+   - Mix: 0-100%
+
+8. **Phaser**
+   - Rate: 0.1-10 Hz
+   - Depth: 0-100%
+   - Feedback: 0-90%
+
+### 4. Visual Themes
 
 #### Color Schemes
 
@@ -180,7 +227,7 @@ AudioContext.destination (monitoring)
 - Success: `#4caf50`
 - Warning: `#ff9800`
 
-**Theme 2: Green on Black**
+**Theme 2: Matrix (Green on Black)**
 - Background: `#000000`
 - Primary: `#0a0a0a`
 - Accent: `#00ff00` (bright green)
@@ -188,7 +235,7 @@ AudioContext.destination (monitoring)
 - Success: `#00cc00`
 - Warning: `#88ff00`
 
-**Theme 3: Bold & Vivid**
+**Theme 3: Vivid (Bold & Colorful)**
 - Background: `#0d1117`
 - Primary: `#161b22`
 - Accent: `#ff007a` (hot pink)
@@ -196,7 +243,7 @@ AudioContext.destination (monitoring)
 - Tertiary: `#ffd700` (gold)
 - Text: `#ffffff`
 
-### 4. Tutorial System
+### 5. Tutorial System
 
 #### First Launch Tutorial (Skippable)
 1. Welcome screen with "Skip" button
@@ -217,45 +264,55 @@ AudioContext.destination (monitoring)
 - Quick reference guide
 - Keyboard shortcuts list
 
-### 5. Session Management
+### 6. Session Management
 
 #### Save Format (JSON)
 ```json
 {
   "version": "1.0.0",
-  "timestamp": "2025-11-21T10:30:00Z",
-  "theme": "dark",
+  "timestamp": "2025-11-28T10:30:00Z",
+  "theme": "matrix",
   "sequencer": {
     "tempo": 120,
-    "currentPattern": 0,
-    "patterns": [
+    "stepCount": 16,
+    "timeSignature": "4/4",
+    "currentPatternSlot": 0,
+    "patternBank": [
       {
-        "name": "My Pattern",
-        "steps": 16,
-        "tracks": {
-          "kick": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-          "snare": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0]
-        }
+        "name": "Pattern 1",
+        "pattern": {
+          "kick1": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+          "snare1": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+          "loop1": [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+        },
+        "patternSamples": []
       }
     ]
   },
   "loopPedal": {
     "tracks": [
       {
-        "name": "Loop 1",
+        "index": 0,
+        "name": "Global Sample 1",
+        "audioData": "base64_encoded_webm_data",
+        "format": "webm",
         "volume": 0.8,
-        "audioData": "base64_encoded_wav_data",
-        "muted": false
+        "muted": false,
+        "solo": false,
+        "startTrim": 0.5
       }
     ]
+  },
+  "effects": {
+    "reverb": { "enabled": false, "mix": 0.3, "decay": 2.0 },
+    "delay": { "enabled": false, "mix": 0.5, "time": 0.375, "feedback": 0.4 }
   }
 }
 ```
 
 #### Export Options
-1. **Session File** (.json): Complete session, can be re-loaded
-2. **Audio Mix** (.wav): Final mixdown of drums + loops
-3. **Full Export** (.zip): Session JSON + individual loop WAVs
+1. **Session File** (.json): Complete session with patterns, samples, and effects
+2. **Audio Mix** (.wav): Final mixdown of drums + samples
 
 ## Code Conventions
 
@@ -382,28 +439,19 @@ const scheduleDrumHit = (instrument, time, velocity) => {
 
 ## Future Enhancement Ideas
 
-(Not for initial release, but documented for later)
+(Documented for potential future development)
 
-### Phase 2 Features
+### Potential Features
 - Additional drum kits (electronic, acoustic, world percussion)
-- Custom sample upload
-- Effects (reverb, delay, distortion)
+- Custom sample upload from files
 - Swing/groove quantization
-- Pattern chaining (song mode)
-
-### Phase 3 Features
 - Collaboration (share sessions via URL)
 - Cloud save/sync
 - Built-in lessons/challenges
 - MIDI controller support
 - Audio export to MP3/OGG
-
-### Phase 4 Features
-- Social features (share creations)
-- Sample marketplace
-- Advanced editing (copy/paste patterns)
+- Copy/paste patterns between slots
 - Automation (parameter changes over time)
-- VST plugin support (ambitious!)
 
 ## Project Philosophy
 
@@ -467,6 +515,6 @@ This is an educational project. Contributions welcome!
 
 ---
 
-**Last Updated**: 2025-11-21
-**Version**: 1.0.0
+**Last Updated**: 2025-11-28
+**Version**: 1.1.0
 **Status**: Active Development

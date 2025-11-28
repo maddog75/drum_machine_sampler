@@ -79,9 +79,10 @@ const UI = (() => {
       sequencerCanvas.width = rect.width
       sequencerCanvas.height = rect.height
 
-      // Calculate grid dimensions
-      gridCellWidth = sequencerCanvas.width / 16
-      gridCellHeight = sequencerCanvas.height / 16
+      // Calculate grid dimensions based on current step count
+      const stepCount = Sequencer.getStepCount()
+      gridCellWidth = sequencerCanvas.width / stepCount
+      gridCellHeight = sequencerCanvas.height / 16 // Always 16 tracks (8 drums + 8 loops)
 
       renderSequencerGrid()
     }
@@ -250,8 +251,7 @@ const UI = (() => {
       btn.dataset.presetId = pattern.id
 
       btn.innerHTML = `
-        <div class="preset-btn__name">${pattern.name}</div>
-        <div class="preset-btn__info">${pattern.genre} • ${pattern.tempo} BPM</div>
+        <div class="preset-btn__name">${pattern.name} - ${pattern.tempo} BPM</div>
       `
 
       btn.addEventListener('click', () => {
@@ -285,26 +285,69 @@ const UI = (() => {
       trackDiv.className = 'loop-track'
       trackDiv.dataset.trackIndex = i
 
+      // Determine if this is a global sample (first 4) or pattern-specific
+      const isGlobal = i < 4
+      const sampleName = isGlobal ? `Global Sample ${i + 1}` : `Sample ${i - 3}`
+
       trackDiv.innerHTML = `
         <div class="loop-track__header">
-          <span class="loop-track__name">Loop ${i + 1}</span>
+          <span class="loop-track__name">${sampleName}</span>
+          <span class="loop-track__duration">0.0s</span>
         </div>
         <div class="loop-track__controls">
-          <button class="btn btn--primary btn--small btn-record" data-action="record">● Rec</button>
-          <button class="btn btn--secondary btn--small btn-play" data-action="play">▶ Play</button>
-          <button class="btn btn--secondary btn--small btn-stop" data-action="stop">■ Stop</button>
-          <button class="btn btn--secondary btn--small btn-clear" data-action="clear">✕ Clear</button>
+          <button class="btn btn--primary btn--small btn-record" data-action="record" style="height: 24px; padding: 2px 8px;">● Rec</button>
+          <button class="btn btn--secondary btn--small btn-play" data-action="play" style="height: 24px; padding: 2px 8px;">▶ Play</button>
+          <label class="control control--compact" style="margin-left: 8px;" title="Trim start of sample">
+            <input type="range" class="control__slider track-trim" min="0" max="5" step="0.1" value="0">
+            <span class="control__value trim-value">0.0s</span>
+          </label>
+          <label class="control control--compact" style="margin-left: 4px;">
+            <input type="range" class="control__slider track-volume" min="0" max="100" value="80">
+            <span class="control__value">80%</span>
+          </label>
         </div>
-        <div class="loop-track__waveform"></div>
-        <label class="control control--compact">
-          <span class="control__label">Vol</span>
-          <input type="range" class="control__slider track-volume" min="0" max="100" value="80">
-          <span class="control__value">80%</span>
-        </label>
       `
 
       loopTracksContainer.appendChild(trackDiv)
     }
+
+    // Update durations initially
+    updateLoopTrackDurations()
+  }
+
+  /**
+   * Update loop track duration displays and trim slider values
+   */
+  const updateLoopTrackDurations = () => {
+    if (!loopTracksContainer) return
+
+    const trackDivs = loopTracksContainer.querySelectorAll('.loop-track')
+    trackDivs.forEach((trackDiv, index) => {
+      const durationSpan = trackDiv.querySelector('.loop-track__duration')
+      const trimSlider = trackDiv.querySelector('.track-trim')
+      const trimValueSpan = trackDiv.querySelector('.trim-value')
+
+      const trackInfo = LoopPedal.getTrackInfo(index)
+
+      if (durationSpan) {
+        if (trackInfo && trackInfo.hasAudio) {
+          // Show effective duration (total - startTrim)
+          const effectiveDuration = Math.max(0, trackInfo.duration - trackInfo.startTrim)
+          durationSpan.textContent = `${effectiveDuration.toFixed(1)}s`
+        } else {
+          durationSpan.textContent = '0.0s'
+        }
+      }
+
+      // Update trim slider value (for when loading sessions)
+      if (trimSlider && trackInfo) {
+        trimSlider.value = trackInfo.startTrim || 0
+      }
+      if (trimValueSpan && trackInfo) {
+        const trimValue = trackInfo.startTrim || 0
+        trimValueSpan.textContent = `${trimValue.toFixed(1)}s`
+      }
+    })
   }
 
   /**
@@ -326,7 +369,7 @@ const UI = (() => {
 
     const allTracks = Sequencer.getAllTracks()
     const numTracks = allTracks.length
-    const numSteps = 16
+    const numSteps = Sequencer.getStepCount()
 
     gridCellWidth = width / numSteps
     gridCellHeight = height / numTracks
@@ -491,13 +534,42 @@ const UI = (() => {
       })
     }
 
-    // Clear sequencer button
+    // Step count slider
+    const stepCountSlider = document.getElementById('stepCountSlider')
+    const stepCountValue = document.getElementById('stepCountValue')
+    if (stepCountSlider) {
+      stepCountSlider.addEventListener('input', (e) => {
+        const stepCount = parseInt(e.target.value, 10)
+        Sequencer.setStepCount(stepCount)
+        if (stepCountValue) {
+          stepCountValue.textContent = stepCount
+        }
+        renderSequencerGrid()
+      })
+    }
+
+    // Clear sequencer button (double-click to clear current pattern)
     const clearSequencerBtn = document.getElementById('clearSequencerBtn')
     if (clearSequencerBtn) {
-      clearSequencerBtn.addEventListener('click', () => {
-        if (confirm('Clear all drum patterns? This cannot be undone.')) {
-          Sequencer.clearPattern()
+      let lastClickTime = 0
+      const DOUBLE_CLICK_THRESHOLD = 500 // ms
+
+      clearSequencerBtn.addEventListener('click', async () => {
+        const now = Date.now()
+        const timeSinceLastClick = now - lastClickTime
+        lastClickTime = now
+
+        if (timeSinceLastClick < DOUBLE_CLICK_THRESHOLD) {
+          // Double-click detected - clear current pattern only
+          await SongMode.clearCurrentPattern()
           renderSequencerGrid()
+          updateSongSections()
+        } else {
+          // Single click - show hint
+          clearSequencerBtn.textContent = '✕ Double-click to clear'
+          setTimeout(() => {
+            clearSequencerBtn.innerHTML = '<span class="btn__icon">✕</span>Clear'
+          }, 1500)
         }
       })
     }
@@ -620,6 +692,43 @@ const UI = (() => {
     // Loop track controls
     if (loopTracksContainer) {
       loopTracksContainer.addEventListener('click', handleLoopTrackAction)
+
+      // Handle trim slider changes
+      loopTracksContainer.addEventListener('input', (e) => {
+        if (e.target.classList.contains('track-trim')) {
+          const trackDiv = e.target.closest('.loop-track')
+          if (trackDiv) {
+            const trackIndex = parseInt(trackDiv.dataset.trackIndex, 10)
+            const trimValue = parseFloat(e.target.value)
+            LoopPedal.setTrackStartTrim(trackIndex, trimValue)
+
+            // Update display
+            const valueSpan = e.target.parentElement.querySelector('.trim-value')
+            if (valueSpan) {
+              valueSpan.textContent = `${trimValue.toFixed(1)}s`
+            }
+
+            // Update duration display to show effective duration
+            updateLoopTrackDurations()
+          }
+        }
+
+        // Handle volume slider changes
+        if (e.target.classList.contains('track-volume')) {
+          const trackDiv = e.target.closest('.loop-track')
+          if (trackDiv) {
+            const trackIndex = parseInt(trackDiv.dataset.trackIndex, 10)
+            const volume = parseInt(e.target.value, 10) / 100
+            LoopPedal.setTrackVolume(trackIndex, volume)
+
+            // Update display
+            const valueSpan = e.target.parentElement.querySelector('.control__value')
+            if (valueSpan) {
+              valueSpan.textContent = `${e.target.value}%`
+            }
+          }
+        }
+      })
     }
 
     // Master volume
@@ -642,12 +751,23 @@ const UI = (() => {
     // Listen to sequencer events
     Sequencer.on('stepTriggered', handleStepTriggered)
     Sequencer.on('tempoChanged', updateTempoDisplay)
+    Sequencer.on('stepCountChanged', (stepCount) => {
+      const stepCountValue = document.getElementById('stepCountValue')
+      const stepCountSlider = document.getElementById('stepCountSlider')
+      if (stepCountValue) {
+        stepCountValue.textContent = stepCount
+      }
+      if (stepCountSlider) {
+        stepCountSlider.value = stepCount
+      }
+      renderSequencerGrid()
+    })
   }
 
   /**
    * Handle sequencer canvas click
    */
-  const handleSequencerClick = (e) => {
+  const handleSequencerClick = async (e) => {
     const rect = sequencerCanvas.getBoundingClientRect()
 
     // Use more precise coordinate calculation
@@ -662,14 +782,30 @@ const UI = (() => {
     const row = Math.floor(y / gridCellHeight)
 
     const allTracks = Sequencer.getAllTracks()
-    if (row >= 0 && row < allTracks.length && col >= 0 && col < 16) {
+    if (row >= 0 && row < allTracks.length && col >= 0 && col < Sequencer.getStepCount()) {
       const track = allTracks[row]
+
+      // Check if we're adding (0 -> 1) or removing (1 -> 0)
+      const wasActive = Sequencer.getStep(track.id, col)
+
       Sequencer.toggleStep(track.id, col)
       renderSequencerGrid()
 
-      // Preview sound (only for drum tracks)
-      if (!track.id.startsWith('loop')) {
-        AudioEngine.playDrum(track.id)
+      // Save the modified pattern to the pattern bank
+      // This ensures edits are preserved when chain mode switches patterns
+      await SongMode.saveCurrentPattern()
+
+      // Only preview sound when ADDING a step (not when removing)
+      if (!wasActive) {
+        if (track.id.startsWith('loop')) {
+          // Preview loop sample (one-shot playback)
+          const loopNumber = parseInt(track.id.replace('loop', ''), 10)
+          const trackIndex = loopNumber - 1 // Convert loop1-8 to 0-7
+          LoopPedal.playTrack(trackIndex, false) // false = one-shot, not looping
+        } else {
+          // Preview drum sound
+          AudioEngine.playDrum(track.id)
+        }
       }
     }
   }
@@ -703,6 +839,8 @@ const UI = (() => {
           LoopPedal.stopRecording()
           btn.textContent = '● Rec'
           btn.classList.remove('is-recording')
+          // Update duration after recording stops
+          setTimeout(() => updateLoopTrackDurations(), 100)
         } else {
           LoopPedal.startRecording(trackIndex)
           btn.textContent = '■ Stop Rec'
@@ -710,15 +848,8 @@ const UI = (() => {
         }
         break
       case 'play':
-        LoopPedal.playTrack(trackIndex)
-        break
-      case 'stop':
-        LoopPedal.stopTrack(trackIndex)
-        break
-      case 'clear':
-        if (confirm('Clear this loop track?')) {
-          LoopPedal.clearTrack(trackIndex)
-        }
+        // Play sample once (one-shot, not looping)
+        LoopPedal.playTrack(trackIndex, false)
         break
     }
   }
@@ -796,8 +927,8 @@ const UI = (() => {
    * Cycle through themes
    */
   const cycleTheme = () => {
-    const themes = ['dark', 'matrix', 'vivid']
-    const currentTheme = document.body.dataset.theme || 'dark'
+    const themes = ['spectrum', 'dark', 'matrix', 'vivid']
+    const currentTheme = document.body.dataset.theme || 'spectrum'
     const currentIndex = themes.indexOf(currentTheme)
     const nextIndex = (currentIndex + 1) % themes.length
 
@@ -821,12 +952,19 @@ const UI = (() => {
     const playPauseBtn = document.getElementById('playPauseBtn')
     if (!playPauseBtn) return
 
+    const playIcon = playPauseBtn.querySelector('.icon--play')
+    const pauseIcon = playPauseBtn.querySelector('.icon--pause')
+
     if (Sequencer.getIsPlaying()) {
       playPauseBtn.classList.add('is-playing')
       playPauseBtn.setAttribute('aria-label', 'Pause')
+      if (playIcon) playIcon.classList.add('hidden')
+      if (pauseIcon) pauseIcon.classList.remove('hidden')
     } else {
       playPauseBtn.classList.remove('is-playing')
       playPauseBtn.setAttribute('aria-label', 'Play')
+      if (playIcon) playIcon.classList.remove('hidden')
+      if (pauseIcon) pauseIcon.classList.add('hidden')
     }
   }
 
@@ -1135,6 +1273,157 @@ const UI = (() => {
   }
 
   /**
+   * Update chain mode UI and pattern selection
+   */
+  const updateChainModeUI = () => {
+    // Update chain mode toggle
+    const chainModeToggle = document.getElementById('chainModeToggle')
+    if (chainModeToggle) {
+      chainModeToggle.checked = SongMode.getChainMode()
+    }
+
+    // Update pattern button selection
+    const currentIndex = SongMode.getCurrentPatternIndex()
+    const buttons = document.querySelectorAll('.pattern-slot__button')
+    buttons.forEach((btn, idx) => {
+      if (idx === currentIndex) {
+        btn.classList.add('is-active')
+      } else {
+        btn.classList.remove('is-active')
+      }
+    })
+  }
+
+  /**
+   * Update effects UI elements to match current settings
+   */
+  const updateEffectsUI = () => {
+    const settings = Effects.getSettings()
+
+    // Reverb
+    const reverbEnabled = document.getElementById('reverbEnabled')
+    const reverbWetDry = document.getElementById('reverbWetDry')
+    const reverbWetDryValue = document.getElementById('reverbWetDryValue')
+    const reverbDecay = document.getElementById('reverbDecay')
+    const reverbDecayValue = document.getElementById('reverbDecayValue')
+
+    if (reverbEnabled) reverbEnabled.checked = settings.reverb.enabled
+    if (reverbWetDry) reverbWetDry.value = Math.round(settings.reverb.wetDry * 100)
+    if (reverbWetDryValue) reverbWetDryValue.textContent = `${Math.round(settings.reverb.wetDry * 100)}%`
+    if (reverbDecay) reverbDecay.value = Math.round(settings.reverb.decayTime * 10)
+    if (reverbDecayValue) reverbDecayValue.textContent = `${settings.reverb.decayTime.toFixed(1)}s`
+
+    // Delay
+    const delayEnabled = document.getElementById('delayEnabled')
+    const delayWetDry = document.getElementById('delayWetDry')
+    const delayWetDryValue = document.getElementById('delayWetDryValue')
+    const delayTime = document.getElementById('delayTime')
+    const delayTimeValue = document.getElementById('delayTimeValue')
+    const delayFeedback = document.getElementById('delayFeedback')
+    const delayFeedbackValue = document.getElementById('delayFeedbackValue')
+
+    if (delayEnabled) delayEnabled.checked = settings.delay.enabled
+    if (delayWetDry) delayWetDry.value = Math.round(settings.delay.wetDry * 100)
+    if (delayWetDryValue) delayWetDryValue.textContent = `${Math.round(settings.delay.wetDry * 100)}%`
+    if (delayTime) delayTime.value = Math.round(settings.delay.delayTime * 100)
+    if (delayTimeValue) delayTimeValue.textContent = `${settings.delay.delayTime.toFixed(3)}s`
+    if (delayFeedback) delayFeedback.value = Math.round(settings.delay.feedback * 100)
+    if (delayFeedbackValue) delayFeedbackValue.textContent = `${Math.round(settings.delay.feedback * 100)}%`
+
+    // Distortion
+    const distortionEnabled = document.getElementById('distortionEnabled')
+    const distortionAmount = document.getElementById('distortionAmount')
+    const distortionAmountValue = document.getElementById('distortionAmountValue')
+    const distortionTone = document.getElementById('distortionTone')
+    const distortionToneValue = document.getElementById('distortionToneValue')
+
+    if (distortionEnabled) distortionEnabled.checked = settings.distortion.enabled
+    if (distortionAmount) distortionAmount.value = Math.round(settings.distortion.amount * 100)
+    if (distortionAmountValue) distortionAmountValue.textContent = `${Math.round(settings.distortion.amount * 100)}%`
+    if (distortionTone) distortionTone.value = Math.round(settings.distortion.tone * 100)
+    if (distortionToneValue) distortionToneValue.textContent = `${Math.round(settings.distortion.tone * 100)}%`
+
+    // Compressor
+    const compressorEnabled = document.getElementById('compressorEnabled')
+    const compressorThreshold = document.getElementById('compressorThreshold')
+    const compressorThresholdValue = document.getElementById('compressorThresholdValue')
+    const compressorRatio = document.getElementById('compressorRatio')
+    const compressorRatioValue = document.getElementById('compressorRatioValue')
+
+    if (compressorEnabled) compressorEnabled.checked = settings.compressor.enabled
+    if (compressorThreshold) compressorThreshold.value = settings.compressor.threshold + 100
+    if (compressorThresholdValue) compressorThresholdValue.textContent = `${settings.compressor.threshold}dB`
+    if (compressorRatio) compressorRatio.value = settings.compressor.ratio
+    if (compressorRatioValue) compressorRatioValue.textContent = `${settings.compressor.ratio}:1`
+
+    // EQ
+    const eqEnabled = document.getElementById('eqEnabled')
+    const eqLow = document.getElementById('eqLow')
+    const eqLowValue = document.getElementById('eqLowValue')
+    const eqMid = document.getElementById('eqMid')
+    const eqMidValue = document.getElementById('eqMidValue')
+    const eqHigh = document.getElementById('eqHigh')
+    const eqHighValue = document.getElementById('eqHighValue')
+
+    if (eqEnabled) eqEnabled.checked = settings.eq.enabled
+    if (eqLow) eqLow.value = settings.eq.low
+    if (eqLowValue) eqLowValue.textContent = `${settings.eq.low >= 0 ? '+' : ''}${settings.eq.low.toFixed(1)}dB`
+    if (eqMid) eqMid.value = settings.eq.mid
+    if (eqMidValue) eqMidValue.textContent = `${settings.eq.mid >= 0 ? '+' : ''}${settings.eq.mid.toFixed(1)}dB`
+    if (eqHigh) eqHigh.value = settings.eq.high
+    if (eqHighValue) eqHighValue.textContent = `${settings.eq.high >= 0 ? '+' : ''}${settings.eq.high.toFixed(1)}dB`
+
+    // Filter
+    const filterEnabled = document.getElementById('filterEnabled')
+    const filterType = document.getElementById('filterType')
+    const filterFrequency = document.getElementById('filterFrequency')
+    const filterFrequencyValue = document.getElementById('filterFrequencyValue')
+    const filterResonance = document.getElementById('filterResonance')
+    const filterResonanceValue = document.getElementById('filterResonanceValue')
+
+    if (filterEnabled) filterEnabled.checked = settings.filter.enabled
+    if (filterType) filterType.value = settings.filter.type
+    if (filterFrequency) filterFrequency.value = settings.filter.frequency
+    if (filterFrequencyValue) filterFrequencyValue.textContent = `${settings.filter.frequency}Hz`
+    if (filterResonance) filterResonance.value = Math.round(settings.filter.resonance * 10)
+    if (filterResonanceValue) filterResonanceValue.textContent = settings.filter.resonance.toFixed(1)
+
+    // Chorus
+    const chorusEnabled = document.getElementById('chorusEnabled')
+    const chorusRate = document.getElementById('chorusRate')
+    const chorusRateValue = document.getElementById('chorusRateValue')
+    const chorusDepth = document.getElementById('chorusDepth')
+    const chorusDepthValue = document.getElementById('chorusDepthValue')
+    const chorusMix = document.getElementById('chorusMix')
+    const chorusMixValue = document.getElementById('chorusMixValue')
+
+    if (chorusEnabled) chorusEnabled.checked = settings.chorus.enabled
+    if (chorusRate) chorusRate.value = Math.round(settings.chorus.rate * 10)
+    if (chorusRateValue) chorusRateValue.textContent = `${settings.chorus.rate.toFixed(1)}Hz`
+    if (chorusDepth) chorusDepth.value = Math.round(settings.chorus.depth * 10000)
+    if (chorusDepthValue) chorusDepthValue.textContent = `${Math.round(settings.chorus.depth * 10000)}%`
+    if (chorusMix) chorusMix.value = Math.round(settings.chorus.mix * 100)
+    if (chorusMixValue) chorusMixValue.textContent = `${Math.round(settings.chorus.mix * 100)}%`
+
+    // Phaser
+    const phaserEnabled = document.getElementById('phaserEnabled')
+    const phaserRate = document.getElementById('phaserRate')
+    const phaserRateValue = document.getElementById('phaserRateValue')
+    const phaserDepth = document.getElementById('phaserDepth')
+    const phaserDepthValue = document.getElementById('phaserDepthValue')
+    const phaserFeedback = document.getElementById('phaserFeedback')
+    const phaserFeedbackValue = document.getElementById('phaserFeedbackValue')
+
+    if (phaserEnabled) phaserEnabled.checked = settings.phaser.enabled
+    if (phaserRate) phaserRate.value = Math.round(settings.phaser.rate * 10)
+    if (phaserRateValue) phaserRateValue.textContent = `${settings.phaser.rate.toFixed(1)}Hz`
+    if (phaserDepth) phaserDepth.value = Math.round(settings.phaser.depth * 100)
+    if (phaserDepthValue) phaserDepthValue.textContent = `${Math.round(settings.phaser.depth * 100)}%`
+    if (phaserFeedback) phaserFeedback.value = Math.round(settings.phaser.feedback * 100)
+    if (phaserFeedbackValue) phaserFeedbackValue.textContent = `${Math.round(settings.phaser.feedback * 100)}%`
+  }
+
+  /**
    * Setup song mode controls
    */
   const setupSongModeControls = () => {
@@ -1245,19 +1534,8 @@ const UI = (() => {
       }
 
       button.addEventListener('click', async () => {
-        // If clicking an empty slot, save current pattern to it
-        if (slot.isEmpty && index !== currentIndex) {
-          const currentPattern = Sequencer.getPattern()
-          const currentTempo = Sequencer.getTempo()
-          const currentTimeSignature = Sequencer.getTimeSignature()
-
-          await SongMode.loadPatternToSlot(index, currentPattern, currentTempo, currentTimeSignature)
-          await SongMode.switchToPattern(index)
-        }
-        // If clicking a non-empty slot, switch to it
-        else if (!slot.isEmpty || index === 0) {
-          SongMode.switchToPattern(index)
-        }
+        // Allow switching to any pattern (empty or not)
+        SongMode.switchToPattern(index)
       })
 
       slotDiv.appendChild(button)
@@ -1379,6 +1657,10 @@ const UI = (() => {
     SongMode.on('patternSwitchQueued', handlePatternSwitchQueued)
     SongMode.on('patternSlotUpdated', handlePatternSlotUpdated)
     SongMode.on('patternBankInitialized', renderPatternSlots)
+    SongMode.on('patternBankRestored', () => {
+      renderPatternSlots()
+      updateChainModeUI()
+    })
   }
 
   /**
@@ -1432,6 +1714,9 @@ const UI = (() => {
     init,
     renderSequencerGrid,
     updateThemeColors,
-    updateSongSections
+    updateSongSections,
+    updateLoopTrackDurations,
+    updateEffectsUI,
+    updateChainModeUI
   }
 })()

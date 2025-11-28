@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="Browser-based drum machine and loop pedal for children ages 8-12">
   <meta name="theme-color" content="#1a1a1a">
-  <title>Drum Machine & Loop Pedal</title>
+  <title>Drum Machine & Sample Recorder</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
-<body data-theme="dark">
+<body data-theme="spectrum">
   <!-- Tutorial Overlay -->
   <div id="tutorial" class="tutorial hidden" role="dialog" aria-labelledby="tutorial-title" aria-modal="true">
     <div class="tutorial__content">
@@ -32,8 +32,8 @@
           <p>Click on the grid to add or remove drum beats. Press play to hear your rhythm!</p>
         </section>
         <section class="help__section">
-          <h3>Loop Pedal</h3>
-          <p>Record your voice or instruments through the microphone. Layer up to 6 loops!</p>
+          <h3>Sample Recorder</h3>
+          <p>Record your voice or instruments through the microphone. Layer up to 8 samples!</p>
         </section>
         <section class="help__section">
           <h3>Keyboard Shortcuts</h3>
@@ -98,7 +98,7 @@
     <!-- Header / Toolbar -->
     <header class="header">
       <div class="header__left">
-        <h1 class="header__title">Drum Machine & Loop Pedal</h1>
+        <h1 class="header__title">Drum Machine & Sample Recorder</h1>
       </div>
       <div class="header__right">
         <button id="vizBtn" class="btn btn--icon" aria-label="Visualizations" title="Open visualizations">
@@ -379,6 +379,20 @@
                 <span class="control__value" id="tempoValue">120</span>
               </label>
               <label class="control control--vertical">
+                <span class="control__label">Steps</span>
+                <input
+                  type="range"
+                  id="stepCountSlider"
+                  class="control__slider"
+                  min="4"
+                  max="48"
+                  step="4"
+                  value="16"
+                  aria-label="Number of steps"
+                >
+                <span class="control__value" id="stepCountValue">16</span>
+              </label>
+              <label class="control control--vertical">
                 <span class="control__label">Time Sig</span>
                 <select id="timeSignature" class="control__select" aria-label="Time signature">
                   <option value="4/4" selected>4/4</option>
@@ -429,9 +443,9 @@
         </div>
       </section>
 
-      <!-- Right Panel: Loop Pedal -->
-      <aside class="loop-pedal" role="complementary" aria-label="Loop pedal">
-        <h2 class="loop-pedal__title">Loop Pedal</h2>
+      <!-- Right Panel: Sample Recorder -->
+      <aside class="loop-pedal" role="complementary" aria-label="Sample recorder">
+        <h2 class="loop-pedal__title">Sample Recorder</h2>
 
         <!-- Microphone Status -->
         <div class="loop-pedal__mic-status">

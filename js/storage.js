@@ -20,7 +20,8 @@ const Storage = (() => {
         theme: document.body.dataset.theme || 'dark',
         sequencer: Sequencer.exportPattern(),
         loopPedal: await LoopPedal.exportData(),
-        patternBank: SongMode.exportPatternBank()
+        patternBank: SongMode.exportPatternBank(),
+        effects: Effects.getSettings()
       }
 
       const sessionJson = JSON.stringify(session)
@@ -78,6 +79,17 @@ const Storage = (() => {
         await LoopPedal.importData(session.loopPedal)
       }
 
+      // Restore effects settings
+      if (session.effects) {
+        Effects.loadSettings(session.effects)
+        UI.updateEffectsUI()
+      }
+
+      // Refresh UI to show restored data
+      UI.renderSequencerGrid()
+      UI.updateLoopTrackDurations()
+      UI.updateChainModeUI()
+
       console.log('Session loaded successfully')
       return true
     } catch (error) {
@@ -97,7 +109,8 @@ const Storage = (() => {
         theme: document.body.dataset.theme || 'dark',
         sequencer: Sequencer.exportPattern(),
         loopPedal: await LoopPedal.exportData(),
-        patternBank: SongMode.exportPatternBank()
+        patternBank: SongMode.exportPatternBank(),
+        effects: Effects.getSettings()
       }
 
       const json = JSON.stringify(session, null, 2)
@@ -157,8 +170,16 @@ const Storage = (() => {
         await LoopPedal.importData(session.loopPedal)
       }
 
+      // Restore effects settings
+      if (session.effects) {
+        Effects.loadSettings(session.effects)
+        UI.updateEffectsUI()
+      }
+
       // Refresh UI
       UI.renderSequencerGrid()
+      UI.updateLoopTrackDurations()
+      UI.updateChainModeUI()
 
       console.log('Session imported successfully')
       return true

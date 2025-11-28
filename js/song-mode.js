@@ -65,6 +65,7 @@ const SongMode = (() => {
         pattern: null,
         tempo: 120,
         timeSignature: '4/4',
+        stepCount: 16,
         repeats: 1,
         loopTracks: null, // Pattern-specific loop tracks (4-7)
         isEmpty: true
@@ -74,7 +75,7 @@ const SongMode = (() => {
     // Load default pattern into slot 0
     const defaultPattern = Sequencer.getPattern()
     if (defaultPattern) {
-      loadPatternToSlot(0, defaultPattern, Sequencer.getTempo(), Sequencer.getTimeSignature())
+      loadPatternToSlot(0, defaultPattern, Sequencer.getTempo(), Sequencer.getTimeSignature(), Sequencer.getStepCount())
     }
 
     currentPatternIndex = 0
@@ -88,7 +89,7 @@ const SongMode = (() => {
    * @param {number} tempo - Optional tempo (defaults to current)
    * @param {string} timeSignature - Optional time signature
    */
-  const loadPatternToSlot = async (index, pattern, tempo = null, timeSignature = null) => {
+  const loadPatternToSlot = async (index, pattern, tempo = null, timeSignature = null, stepCount = null) => {
     if (index < 0 || index >= 10) return
 
     // Export pattern-specific loop tracks (4-7)
@@ -100,6 +101,7 @@ const SongMode = (() => {
       pattern: JSON.parse(JSON.stringify(pattern)), // Deep clone
       tempo: tempo || Sequencer.getTempo(),
       timeSignature: timeSignature || Sequencer.getTimeSignature(),
+      stepCount: stepCount || Sequencer.getStepCount(),
       repeats: patternBank[index].repeats || 1, // Preserve repeat count
       loopTracks,
       isEmpty: false
@@ -131,12 +133,68 @@ const SongMode = (() => {
       pattern: null,
       tempo: 120,
       timeSignature: '4/4',
+      stepCount: 16,
       repeats: 1,
       loopTracks: null,
       isEmpty: true
     }
 
     emit('patternSlotCleared', { index })
+  }
+
+  /**
+   * Check if a pattern has any drum hits or sample triggers
+   * @param {Object} patternSlot - Pattern slot object from pattern bank
+   * @returns {boolean} True if pattern is empty (no hits)
+   */
+  const isPatternEmpty = (patternSlot) => {
+    // Pattern slot structure: { index, name, pattern: {...}, tempo, ... }
+    // The actual beat data is in pattern.pattern.pattern
+    if (!patternSlot || !patternSlot.pattern || !patternSlot.pattern.pattern) return true
+
+    const beatPattern = patternSlot.pattern.pattern
+
+    // Check all tracks in the beat pattern
+    for (const trackId in beatPattern) {
+      const track = beatPattern[trackId]
+      if (Array.isArray(track)) {
+        // Check if any step has a hit (value of 1)
+        if (track.some(step => step === 1)) {
+          return false
+        }
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * Clear the current pattern slot (marks it as empty)
+   */
+  const clearCurrentPattern = async () => {
+    // Clear the sequencer
+    Sequencer.clearPattern()
+
+    // Save the empty pattern to the current slot
+    const emptyPattern = Sequencer.getPattern()
+    const tempo = Sequencer.getTempo()
+    const timeSignature = Sequencer.getTimeSignature()
+    const stepCount = Sequencer.getStepCount()
+    const loopTracks = await LoopPedal.exportPatternTracks()
+
+    patternBank[currentPatternIndex] = {
+      index: currentPatternIndex,
+      name: `Pattern ${currentPatternIndex + 1}`,
+      pattern: JSON.parse(JSON.stringify(emptyPattern)),
+      tempo,
+      timeSignature,
+      stepCount,
+      repeats: patternBank[currentPatternIndex].repeats || 1,
+      loopTracks,
+      isEmpty: true // Mark as empty so it's skipped in chain mode
+    }
+
+    emit('patternSlotUpdated', { index: currentPatternIndex, slot: patternBank[currentPatternIndex] })
   }
 
   /**
@@ -160,7 +218,6 @@ const SongMode = (() => {
     if (index === currentPatternIndex) return
 
     const slot = patternBank[index]
-    if (slot.isEmpty) return
 
     // Save current pattern before switching
     await saveCurrentPattern()
@@ -194,8 +251,9 @@ const SongMode = (() => {
     const currentPattern = Sequencer.getPattern()
     const currentTempo = Sequencer.getTempo()
     const currentTimeSignature = Sequencer.getTimeSignature()
+    const currentStepCount = Sequencer.getStepCount()
 
-    await loadPatternToSlot(currentPatternIndex, currentPattern, currentTempo, currentTimeSignature)
+    await loadPatternToSlot(currentPatternIndex, currentPattern, currentTempo, currentTimeSignature, currentStepCount)
   }
 
   /**
@@ -204,16 +262,43 @@ const SongMode = (() => {
    */
   const applyPatternSwitch = async (index) => {
     const slot = patternBank[index]
-    if (!slot || slot.isEmpty) return
+    if (!slot) return
 
-    // Load pattern into sequencer
-    Sequencer.loadPattern(slot.pattern)
-    Sequencer.setTempo(slot.tempo)
-    Sequencer.setTimeSignature(slot.timeSignature)
+    // If switching to an empty slot, copy the current pattern as a starting point
+    if (slot.isEmpty || !slot.pattern) {
+      const currentPattern = Sequencer.getPattern()
+      const currentTempo = Sequencer.getTempo()
+      const currentTimeSignature = Sequencer.getTimeSignature()
+      const currentStepCount = Sequencer.getStepCount()
+
+      await loadPatternToSlot(index, currentPattern, currentTempo, currentTimeSignature, currentStepCount)
+
+      // Refresh slot reference after loading
+      const updatedSlot = patternBank[index]
+
+      // Load the copied pattern
+      Sequencer.loadPattern(updatedSlot.pattern)
+      Sequencer.setTempo(updatedSlot.tempo)
+      Sequencer.setTimeSignature(updatedSlot.timeSignature)
+      Sequencer.setStepCount(updatedSlot.stepCount)
+    } else {
+      // Load existing pattern
+      Sequencer.loadPattern(slot.pattern)
+      Sequencer.setTempo(slot.tempo)
+      Sequencer.setTimeSignature(slot.timeSignature)
+
+      // Restore step count
+      if (slot.stepCount !== undefined) {
+        Sequencer.setStepCount(slot.stepCount)
+      }
+    }
 
     // Load pattern-specific loop tracks (4-7)
     if (slot.loopTracks) {
       await LoopPedal.importPatternTracks(slot.loopTracks)
+    } else {
+      // Clear pattern-specific tracks if switching to empty slot
+      await LoopPedal.importPatternTracks(null)
     }
 
     currentPatternIndex = index
@@ -581,6 +666,7 @@ const SongMode = (() => {
         pattern: slot.pattern ? JSON.parse(JSON.stringify(slot.pattern)) : null,
         tempo: slot.tempo,
         timeSignature: slot.timeSignature,
+        stepCount: slot.stepCount,
         repeats: slot.repeats,
         loopTracks: slot.loopTracks, // Pattern-specific loop tracks (already base64)
         isEmpty: slot.isEmpty
@@ -604,6 +690,7 @@ const SongMode = (() => {
       pattern: slot.pattern ? JSON.parse(JSON.stringify(slot.pattern)) : null,
       tempo: slot.tempo || 120,
       timeSignature: slot.timeSignature || '4/4',
+      stepCount: slot.stepCount || 16,
       repeats: slot.repeats || 1,
       loopTracks: slot.loopTracks || null,
       isEmpty: slot.isEmpty !== false ? true : false
@@ -626,6 +713,11 @@ const SongMode = (() => {
       Sequencer.setTempo(currentSlot.tempo)
       Sequencer.setTimeSignature(currentSlot.timeSignature)
 
+      // Restore step count
+      if (currentSlot.stepCount !== undefined) {
+        Sequencer.setStepCount(currentSlot.stepCount)
+      }
+
       // Load pattern-specific loop tracks (4-7)
       if (currentSlot.loopTracks) {
         await LoopPedal.importPatternTracks(currentSlot.loopTracks)
@@ -645,8 +737,8 @@ const SongMode = (() => {
     chainCurrentPattern = 0
     chainCurrentRepeat = 0
 
-    // Find first non-empty pattern
-    while (chainCurrentPattern < 10 && patternBank[chainCurrentPattern].isEmpty) {
+    // Find first non-empty pattern (check actual content, not just isEmpty flag)
+    while (chainCurrentPattern < 10 && isPatternEmpty(patternBank[chainCurrentPattern])) {
       chainCurrentPattern++
     }
 
@@ -701,8 +793,8 @@ const SongMode = (() => {
     chainCurrentRepeat = 0
     chainCurrentPattern++
 
-    // Find next non-empty pattern
-    while (chainCurrentPattern < 10 && patternBank[chainCurrentPattern].isEmpty) {
+    // Find next non-empty pattern (check actual content, not just isEmpty flag)
+    while (chainCurrentPattern < 10 && isPatternEmpty(patternBank[chainCurrentPattern])) {
       chainCurrentPattern++
     }
 
@@ -711,8 +803,8 @@ const SongMode = (() => {
       // Loop back to the beginning
       chainCurrentPattern = 0
 
-      // Find first non-empty pattern
-      while (chainCurrentPattern < 10 && patternBank[chainCurrentPattern].isEmpty) {
+      // Find first non-empty pattern (check actual content, not just isEmpty flag)
+      while (chainCurrentPattern < 10 && isPatternEmpty(patternBank[chainCurrentPattern])) {
         chainCurrentPattern++
       }
 
@@ -782,6 +874,7 @@ const SongMode = (() => {
     loadPatternToSlot,
     getPatternSlot,
     clearPatternSlot,
+    clearCurrentPattern,
     setPatternRepeats,
     switchToPattern,
     saveCurrentPattern,

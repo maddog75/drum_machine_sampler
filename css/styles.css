@@ -102,6 +102,106 @@
   --color-border-light: #484f58;
 }
 
+/* Theme: Spectrum (Multi-color sections) */
+[data-theme="spectrum"] {
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #0a0a0a;
+  --color-bg-tertiary: #1a1a1a;
+  --color-bg-overlay: rgba(0, 0, 0, 0.9);
+
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #cccccc;
+  --color-text-muted: #888888;
+
+  /* Default accent (green for sequencer) */
+  --color-accent: #00ff00;
+  --color-accent-hover: #00ff41;
+  --color-accent-active: #00cc00;
+
+  /* Section-specific colors */
+  --color-presets: #00d9ff;        /* Cyan */
+  --color-presets-hover: #33e0ff;
+  --color-presets-border: #006080;
+
+  --color-effects: #ff9500;        /* Orange */
+  --color-effects-hover: #ffaa33;
+  --color-effects-border: #804a00;
+
+  --color-sequencer: #00ff00;      /* Green */
+  --color-sequencer-hover: #00ff41;
+  --color-sequencer-border: #008000;
+
+  --color-looppedal: #ff00ff;      /* Magenta */
+  --color-looppedal-hover: #ff33ff;
+  --color-looppedal-border: #800080;
+
+  --color-success: #00ff00;
+  --color-warning: #ff9500;
+  --color-danger: #ff0055;
+
+  --color-border: #222222;
+  --color-border-light: #333333;
+}
+
+/* Spectrum theme section overrides */
+[data-theme="spectrum"] .presets {
+  border-color: var(--color-presets-border);
+}
+
+[data-theme="spectrum"] .presets__title {
+  color: var(--color-presets);
+}
+
+[data-theme="spectrum"] .preset-btn:hover,
+[data-theme="spectrum"] .preset-btn.is-active {
+  border-color: var(--color-presets);
+}
+
+[data-theme="spectrum"] .preset-btn:hover .preset-btn__name,
+[data-theme="spectrum"] .preset-btn.is-active .preset-btn__name {
+  color: var(--color-presets);
+}
+
+[data-theme="spectrum"] .audio-filters {
+  border-color: var(--color-effects-border);
+}
+
+[data-theme="spectrum"] .audio-filters__title {
+  color: var(--color-effects);
+}
+
+[data-theme="spectrum"] .effect-module__title {
+  color: var(--color-effects);
+}
+
+[data-theme="spectrum"] .toggle__slider:before {
+  background: var(--color-effects);
+}
+
+[data-theme="spectrum"] .sequencer {
+  border-color: var(--color-sequencer-border);
+}
+
+[data-theme="spectrum"] .sequencer__title {
+  color: var(--color-sequencer);
+}
+
+[data-theme="spectrum"] .pattern-selector__chain-label {
+  color: var(--color-sequencer);
+}
+
+[data-theme="spectrum"] .loop-pedal {
+  border-color: var(--color-looppedal-border);
+}
+
+[data-theme="spectrum"] .loop-pedal__title {
+  color: var(--color-looppedal);
+}
+
+[data-theme="spectrum"] .loop-track__title {
+  color: var(--color-looppedal);
+}
+
 /* ===================================
    RESET & BASE STYLES
    =================================== */
@@ -209,12 +309,13 @@ textarea {
 
 .transport {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   padding: var(--spacing-lg);
   background: var(--color-bg-secondary);
   border-top: 2px solid var(--color-border);
   flex-shrink: 0;
+  gap: var(--spacing-xl);
 }
 
 /* ===================================
@@ -328,14 +429,14 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: var(--spacing-md);
+  padding: 0 var(--spacing-md);  
   background: var(--color-bg-tertiary);
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
   text-align: left;
   width: 100%;
-  min-height: 60px;
+  min-height: 10px;
 }
 
 .preset-btn__name {
@@ -853,7 +954,7 @@ textarea {
 .loop-track {
   background: var(--color-bg-tertiary);
   border-radius: var(--radius-md);
-  padding: 6px;
+  padding: 0 6px;
   border: 1px solid var(--color-border);
 }
 
@@ -869,11 +970,22 @@ textarea {
   font-weight: 600;
 }
 
+.loop-track__duration {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}
+
 .loop-track__controls {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
   margin-bottom: 4px;
+}
+
+.loop-track__controls button {
+  font-size: 0.75rem;
+  padding: 4px 0;
+  min-height: 20px;
 }
 
 .loop-track__waveform {
