@@ -1,0 +1,116 @@
+{
+  "version": "1.0.0",
+  "defaultInstruments": [
+    "kick1", "kick2", "snare1", "snare2", "hihatClosed", "hihatOpen",
+    "clap", "snap", "tomHigh", "tomMid", "tomLow", "crash",
+    "ride", "shaker", "cowbell", "rimshot"
+  ],
+  "categories": [
+    {
+      "id": "kicks",
+      "name": "Kicks",
+      "instruments": [
+        { "id": "kick1", "name": "Kick 1", "url": "assets/samples/kick1.wav" },
+        { "id": "kick2", "name": "Kick 2", "url": "assets/samples/kick2.wav" },
+        { "id": "kick808", "name": "808 Kick", "url": "assets/samples/drums/kicks/kick-808.wav" },
+        { "id": "kickDeep", "name": "Deep Kick", "url": "assets/samples/drums/kicks/kick-deep.wav" },
+        { "id": "kickPunch", "name": "Punchy Kick", "url": "assets/samples/drums/kicks/kick-punch.wav" },
+        { "id": "kickSub", "name": "Sub Kick", "url": "assets/samples/drums/kicks/kick-sub.wav" },
+        { "id": "kickAcoustic", "name": "Acoustic Kick", "url": "assets/samples/drums/kicks/kick-acoustic.wav" },
+        { "id": "kickElectro", "name": "Electro Kick", "url": "assets/samples/drums/kicks/kick-electro.wav" }
+      ]
+    },
+    {
+      "id": "snares",
+      "name": "Snares",
+      "instruments": [
+        { "id": "snare1", "name": "Snare 1", "url": "assets/samples/snare1.wav" },
+        { "id": "snare2", "name": "Snare 2", "url": "assets/samples/snare2.wav" },
+        { "id": "snare808", "name": "808 Snare", "url": "assets/samples/drums/snares/snare-808.wav" },
+        { "id": "snareCrack", "name": "Snare Crack", "url": "assets/samples/drums/snares/snare-crack.wav" },
+        { "id": "snareTight", "name": "Tight Snare", "url": "assets/samples/drums/snares/snare-tight.wav" },
+        { "id": "snareAcoustic", "name": "Acoustic Snare", "url": "assets/samples/drums/snares/snare-acoustic.wav" },
+        { "id": "clap", "name": "Clap", "url": "assets/samples/clap.wav" },
+        { "id": "rimshot", "name": "Rimshot", "url": "assets/samples/rimshot.wav" }
+      ]
+    },
+    {
+      "id": "hihats",
+      "name": "Hi-Hats",
+      "instruments": [
+        { "id": "hihatClosed", "name": "Hi-Hat Closed", "url": "assets/samples/hihat-closed.wav" },
+        { "id": "hihatOpen", "name": "Hi-Hat Open", "url": "assets/samples/hihat-open.wav" },
+        { "id": "hihat808Closed", "name": "808 Closed", "url": "assets/samples/drums/hihats/hihat-808-closed.wav" },
+        { "id": "hihat808Open", "name": "808 Open", "url": "assets/samples/drums/hihats/hihat-808-open.wav" },
+        { "id": "hihatPedal", "name": "Pedal Hat", "url": "assets/samples/drums/hihats/hihat-pedal.wav" },
+        { "id": "shaker", "name": "Shaker", "url": "assets/samples/shaker.wav" },
+        { "id": "tambourine", "name": "Tambourine", "url": "assets/samples/drums/hihats/tambourine.wav" },
+        { "id": "maracas", "name": "Maracas", "url": "assets/samples/drums/hihats/maracas.wav" }
+      ]
+    },
+    {
+      "id": "toms",
+      "name": "Toms",
+      "instruments": [
+        { "id": "tomHigh", "name": "Tom High", "url": "assets/samples/tom-high.wav" },
+        { "id": "tomMid", "name": "Tom Mid", "url": "assets/samples/tom-mid.wav" },
+        { "id": "tomLow", "name": "Tom Low", "url": "assets/samples/tom-low.wav" },
+        { "id": "tomFloor", "name": "Floor Tom", "url": "assets/samples/drums/toms/tom-floor.wav" },
+        { "id": "tom808High", "name": "808 Tom High", "url": "assets/samples/drums/toms/tom-808-high.wav" },
+        { "id": "tom808Low", "name": "808 Tom Low", "url": "assets/samples/drums/toms/tom-808-low.wav" }
+      ]
+    },
+    {
+      "id": "cymbals",
+      "name": "Cymbals",
+      "instruments": [
+        { "id": "crash", "name": "Crash", "url": "assets/samples/crash.wav" },
+        { "id": "ride", "name": "Ride", "url": "assets/samples/ride.wav" },
+        { "id": "crashHard", "name": "Crash Hard", "url": "assets/samples/drums/cymbals/crash-hard.wav" },
+        { "id": "rideBell", "name": "Ride Bell", "url": "assets/samples/drums/cymbals/ride-bell.wav" },
+        { "id": "splash", "name": "Splash", "url": "assets/samples/drums/cymbals/splash.wav" },
+        { "id": "china", "name": "China", "url": "assets/samples/drums/cymbals/china.wav" }
+      ]
+    },
+    {
+      "id": "percussion",
+      "name": "Percussion",
+      "instruments": [
+        { "id": "snap", "name": "Snap", "url": "assets/samples/snap.wav" },
+        { "id": "cowbell", "name": "Cowbell", "url": "assets/samples/cowbell.wav" },
+        { "id": "conga", "name": "Conga", "url": "assets/samples/percussion/conga.wav" },
+        { "id": "congaHigh", "name": "Conga High", "url": "assets/samples/percussion/conga-high.wav" },
+        { "id": "bongo", "name": "Bongo", "url": "assets/samples/percussion/bongo.wav" },
+        { "id": "bongoHigh", "name": "Bongo High", "url": "assets/samples/percussion/bongo-high.wav" },
+        { "id": "woodblock", "name": "Woodblock", "url": "assets/samples/percussion/woodblock.wav" },
+        { "id": "triangle", "name": "Triangle", "url": "assets/samples/percussion/triangle.wav" },
+        { "id": "claves", "name": "Claves", "url": "assets/samples/percussion/claves.wav" },
+        { "id": "guiro", "name": "Guiro", "url": "assets/samples/percussion/guiro.wav" },
+        { "id": "cabasa", "name": "Cabasa", "url": "assets/samples/percussion/cabasa.wav" },
+        { "id": "agogo", "name": "Agogo", "url": "assets/samples/percussion/agogo.wav" },
+        { "id": "timbale", "name": "Timbale", "url": "assets/samples/percussion/timbale.wav" },
+        { "id": "vibraslap", "name": "Vibraslap", "url": "assets/samples/percussion/vibraslap.wav" }
+      ]
+    },
+    {
+      "id": "animals",
+      "name": "Animal Sounds",
+      "instruments": [
+        { "id": "dogBark", "name": "Dog Bark", "url": "assets/samples/animals/dog-bark.mp3" },
+        { "id": "catMeow", "name": "Cat Meow", "url": "assets/samples/animals/cat-meow.mp3" },
+        { "id": "cow", "name": "Cow Moo", "url": "assets/samples/animals/cow.mp3" },
+        { "id": "sheep", "name": "Sheep Baa", "url": "assets/samples/animals/sheep.mp3" },
+        { "id": "horse", "name": "Horse Neigh", "url": "assets/samples/animals/horse.mp3" },
+        { "id": "pig", "name": "Pig Oink", "url": "assets/samples/animals/pig.mp3" },
+        { "id": "chicken", "name": "Chicken", "url": "assets/samples/animals/chicken.mp3" },
+        { "id": "rooster", "name": "Rooster", "url": "assets/samples/animals/rooster.mp3" },
+        { "id": "duck", "name": "Duck Quack", "url": "assets/samples/animals/duck.mp3" },
+        { "id": "owl", "name": "Owl Hoot", "url": "assets/samples/animals/owl.mp3" },
+        { "id": "wolf", "name": "Wolf Howl", "url": "assets/samples/animals/wolf.mp3" },
+        { "id": "elephant", "name": "Elephant", "url": "assets/samples/animals/elephant.mp3" },
+        { "id": "frog", "name": "Frog Ribbit", "url": "assets/samples/animals/frog.mp3" },
+        { "id": "monkey", "name": "Monkey", "url": "assets/samples/animals/monkey.mp3" }
+      ]
+    }
+  ]
+}
