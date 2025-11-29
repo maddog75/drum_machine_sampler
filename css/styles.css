@@ -725,8 +725,7 @@ textarea {
 
 .track-name--loop {
   background: var(--color-bg-secondary);
-  font-style: italic;
-  color: var(--color-accent);
+  color: #ffffff;
 }
 
 /* Volume Knob */
