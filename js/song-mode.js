@@ -873,6 +873,23 @@ const SongMode = (() => {
   }
 
   /**
+   * Sync global sample name across all pattern slots
+   * Global samples (0-3) share names across all patterns
+   * @param {number} trackIndex - Loop track index (0-3 for global samples)
+   * @param {string} name - New track name
+   */
+  const syncGlobalSampleName = (trackIndex, name) => {
+    // Only sync global samples (indices 0-3)
+    if (trackIndex < 0 || trackIndex > 3) return
+
+    // The name is already stored in LoopPedal, which is the source of truth
+    // for global samples. This function exists for future extensibility
+    // if we need to store names in pattern bank as well.
+
+    emit('globalSampleNameChanged', { trackIndex, name })
+  }
+
+  /**
    * Event listener system
    */
   const on = (event, callback) => {
@@ -934,6 +951,7 @@ const SongMode = (() => {
     stopChainMode,
     exportPatternBank,
     importPatternBank,
+    syncGlobalSampleName,
     on,
     off
   }

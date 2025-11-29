@@ -746,6 +746,60 @@ textarea {
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
+}
+
+/* Sticky header row for knob labels */
+.track-header {
+  display: grid;
+  grid-template-columns: 80px repeat(9, 18px);
+  gap: 1px;
+  align-items: center;
+  background: var(--color-bg-tertiary);
+  border-bottom: 2px solid var(--color-accent);
+  padding: 3px 2px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
+  height: 22px;
+  box-sizing: border-box;
+}
+
+.track-header__name {
+  font-size: 0.69rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  padding: 1px 2px;
+}
+
+.track-header__label {
+  font-size: 0.55rem;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+/* Color-coded header labels matching knob colors */
+.track-header__label--volume { color: #4caf50; }
+.track-header__label--offset { color: #2196f3; }
+.track-header__label--pan { color: #00bcd4; }
+.track-header__label--pitch { color: #9c27b0; }
+.track-header__label--attack { color: #ffeb3b; }
+.track-header__label--decay { color: #ff9800; }
+.track-header__label--length { color: #795548; }
+.track-header__label--bass { color: #f44336; }
+.track-header__label--treble { color: #e91e63; }
+
+/* Track list container (no scroll to maintain canvas alignment) */
+.track-names__scrollable {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .track-name {
@@ -754,11 +808,11 @@ textarea {
   gap: 1px;
   align-items: center;
   background: var(--color-bg-tertiary);
-  font-size: 0.65rem;
+  font-size: 0.81rem;
   font-weight: 500;
   line-height: 1.2;
   flex: 1 1 0;
-  min-height: 0;
+  min-height: 18px;
   border-bottom: 1px solid var(--color-border);
   box-sizing: border-box;
   overflow: hidden;
@@ -771,7 +825,7 @@ textarea {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.55rem;
+  font-size: 0.75rem;
 }
 
 .track-name:last-child {
@@ -781,6 +835,37 @@ textarea {
 .track-name--loop {
   background: var(--color-bg-secondary);
   color: #ffffff;
+}
+
+/* Editable sample track names */
+.track-name__label--editable {
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+  border-radius: var(--radius-sm);
+  border-bottom: 1px dashed var(--color-border);
+}
+
+.track-name__label--editable:hover {
+  color: var(--color-accent);
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom-color: var(--color-accent);
+}
+
+/* Inline edit input for track names */
+.track-name__input {
+  width: 100%;
+  padding: 0 2px;
+  font-size: 0.55rem;
+  font-weight: 500;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.track-name__input:focus {
+  box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.3);
 }
 
 /* Changeable track name (drum instruments) */
@@ -799,10 +884,10 @@ textarea {
    MIXER KNOBS (Per-Track Controls)
    =================================== */
 
-/* Individual mixer knob container */
+/* Individual mixer knob container - scales with track height */
 .mixer-knob {
-  width: 18px;
-  height: 22px;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -810,11 +895,18 @@ textarea {
   cursor: ns-resize;
   user-select: none;
   gap: 0px;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 .mixer-knob__svg {
-  width: 14px;
-  height: 14px;
+  /* Scale to fill container height, maintain square aspect */
+  width: auto;
+  height: 100%;
+  aspect-ratio: 1;
+  max-width: 100%;
+  max-height: 52px; /* Cap maximum size (40px + 30%) */
+  min-height: 13px; /* Minimum readable size (10px + 30%) */
 }
 
 .mixer-knob__bg {
@@ -832,11 +924,7 @@ textarea {
 }
 
 .mixer-knob__label {
-  font-size: 0.5rem;
-  color: var(--color-text-secondary);
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: -0.02em;
+  display: none; /* Labels now in header row */
 }
 
 /* Knob color variants for distinguishing parameter types */
@@ -895,12 +983,24 @@ textarea {
   border-radius: var(--radius-md);
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Spacer to align canvas with track names (matches header height: 22px) */
+.sequencer__grid-spacer {
+  height: 22px;
+  flex-shrink: 0;
+  background: var(--color-bg-tertiary);
+  border-bottom: 2px solid var(--color-accent);
+  box-sizing: border-box;
 }
 
 .sequencer__canvas {
   display: block;
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   cursor: pointer;
 }
 

@@ -100,7 +100,7 @@ const UI = (() => {
       // Calculate grid dimensions based on current step count
       const stepCount = Sequencer.getStepCount()
       gridCellWidth = sequencerCanvas.width / stepCount
-      gridCellHeight = sequencerCanvas.height / 16 // Always 16 tracks (8 drums + 8 loops)
+      gridCellHeight = Math.max(18, sequencerCanvas.height / 24) // 24 tracks, min 18px per row
 
       renderSequencerGrid()
     }
@@ -314,6 +314,31 @@ const UI = (() => {
   }
 
   /**
+   * Render the sticky header row with knob labels
+   */
+  const renderTrackHeader = () => {
+    const header = document.createElement('div')
+    header.className = 'track-header'
+    header.id = 'trackHeader'
+
+    // Empty cell for track name column
+    const nameCell = document.createElement('span')
+    nameCell.className = 'track-header__name'
+    nameCell.textContent = 'Track'
+    header.appendChild(nameCell)
+
+    // Add labels for each knob
+    MIXER_KNOB_CONFIGS.forEach(config => {
+      const label = document.createElement('span')
+      label.className = `track-header__label track-header__label--${config.color}`
+      label.textContent = config.label
+      header.appendChild(label)
+    })
+
+    return header
+  }
+
+  /**
    * Render track names with 8 mixer knobs each
    */
   const renderTrackNames = () => {
@@ -321,6 +346,13 @@ const UI = (() => {
 
     const allTracks = Sequencer.getAllTracks()
     trackNamesContainer.innerHTML = ''
+
+    // Add sticky header row
+    trackNamesContainer.appendChild(renderTrackHeader())
+
+    // Create scrollable container for tracks
+    const scrollable = document.createElement('div')
+    scrollable.className = 'track-names__scrollable'
 
     allTracks.forEach(track => {
       const nameDiv = document.createElement('div')
@@ -344,6 +376,17 @@ const UI = (() => {
         label.addEventListener('click', (e) => {
           e.stopPropagation()
           showInstrumentPicker(track.trackIndex, track.instrumentId)
+        })
+      }
+
+      // Add editable functionality for loop (sample) tracks
+      if (track.id.startsWith('loop')) {
+        const loopIndex = parseInt(track.id.replace('loop', ''), 10) - 1
+        label.classList.add('track-name__label--editable')
+        label.dataset.loopTrackIndex = loopIndex
+        label.addEventListener('click', (e) => {
+          e.stopPropagation()
+          startTrackNameEdit(label, loopIndex)
         })
       }
 
@@ -376,11 +419,115 @@ const UI = (() => {
         nameDiv.appendChild(knobContainer)
       })
 
-      trackNamesContainer.appendChild(nameDiv)
+      scrollable.appendChild(nameDiv)
     })
+
+    trackNamesContainer.appendChild(scrollable)
 
     // Add mixer knob drag handlers
     setupMixerKnobHandlers()
+  }
+
+  /**
+   * Start inline editing of a sample track name
+   * @param {HTMLElement} label - The label element to edit
+   * @param {number} loopTrackIndex - Loop track index (0-7)
+   */
+  const startTrackNameEdit = (label, loopTrackIndex) => {
+    const currentName = label.textContent
+    const isGlobal = loopTrackIndex < 4
+
+    // Create input element
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = 'track-name__input'
+    input.value = currentName
+    input.maxLength = 20
+    // Allow letters, numbers, and spaces
+    input.pattern = '[a-zA-Z0-9 ]*'
+
+    // Replace label with input
+    label.style.display = 'none'
+    label.parentElement.insertBefore(input, label)
+    input.focus()
+    input.select()
+
+    // Prevent keyboard shortcuts from firing while editing
+    const stopShortcuts = (e) => {
+      // Stop propagation for all keys except Escape (which cancels edit)
+      // This prevents space from triggering play/pause, etc.
+      e.stopPropagation()
+    }
+
+    // Handle save on blur or enter
+    const saveEdit = () => {
+      // Clean the name: only allow letters, numbers, and spaces
+      const cleanedName = input.value.replace(/[^a-zA-Z0-9 ]/g, '').trim()
+      const newName = cleanedName || currentName
+      label.textContent = newName
+      label.style.display = ''
+      input.removeEventListener('keydown', stopShortcuts)
+      input.removeEventListener('keyup', stopShortcuts)
+      input.removeEventListener('keypress', stopShortcuts)
+      input.remove()
+
+      // Save the name
+      LoopPedal.setTrackName(loopTrackIndex, newName)
+
+      // If global sample (0-3), emit event for any listeners
+      if (isGlobal && typeof SongMode !== 'undefined' && SongMode.syncGlobalSampleName) {
+        SongMode.syncGlobalSampleName(loopTrackIndex, newName)
+      } else if (!isGlobal && typeof SongMode !== 'undefined' && SongMode.saveCurrentPattern) {
+        // For pattern-specific tracks (4-7), save the current pattern to persist the name
+        SongMode.saveCurrentPattern()
+      }
+
+      // Update the sample recorder panel name as well
+      updateSampleRecorderTrackName(loopTrackIndex, newName)
+    }
+
+    // Handle cancel on escape
+    const cancelEdit = () => {
+      label.style.display = ''
+      input.removeEventListener('keydown', stopShortcuts)
+      input.removeEventListener('keyup', stopShortcuts)
+      input.removeEventListener('keypress', stopShortcuts)
+      input.remove()
+    }
+
+    // Stop all keyboard events from bubbling to prevent shortcuts
+    input.addEventListener('keydown', stopShortcuts)
+    input.addEventListener('keyup', stopShortcuts)
+    input.addEventListener('keypress', stopShortcuts)
+
+    input.addEventListener('blur', saveEdit)
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        input.blur() // Triggers saveEdit via blur handler
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        input.removeEventListener('blur', saveEdit)
+        cancelEdit()
+      }
+    })
+  }
+
+  /**
+   * Update sample recorder panel track name
+   * @param {number} trackIndex - Loop track index (0-7)
+   * @param {string} name - New track name
+   */
+  const updateSampleRecorderTrackName = (trackIndex, name) => {
+    if (!loopTracksContainer) return
+
+    const trackDiv = loopTracksContainer.querySelector(`.loop-track[data-track-index="${trackIndex}"]`)
+    if (trackDiv) {
+      const nameSpan = trackDiv.querySelector('.loop-track__name')
+      if (nameSpan) {
+        nameSpan.textContent = name
+      }
+    }
   }
 
   /**
@@ -532,9 +679,11 @@ const UI = (() => {
       trackDiv.className = 'loop-track'
       trackDiv.dataset.trackIndex = i
 
-      // Determine if this is a global sample (first 4) or pattern-specific
+      // Determine if this is a global loop (first 4) or pattern-specific (5-8)
       const isGlobal = i < 4
-      const sampleName = isGlobal ? `Global Sample ${i + 1}` : `Sample ${i - 3}`
+      const defaultName = isGlobal ? `Global Loop ${i + 1}` : `Loop ${i - 3}`
+      const customName = LoopPedal.getTrackName(i)
+      const sampleName = customName || defaultName
 
       trackDiv.innerHTML = `
         <div class="loop-track__header">
@@ -619,7 +768,7 @@ const UI = (() => {
     const numSteps = Sequencer.getStepCount()
 
     gridCellWidth = width / numSteps
-    gridCellHeight = height / numTracks
+    gridCellHeight = Math.max(18, height / numTracks) // Min 18px per row
 
     // Get time signature to determine group highlighting
     const timeSignature = Sequencer.getTimeSignature()
@@ -1952,6 +2101,25 @@ const UI = (() => {
 
     // Re-render track names to update mixer knobs with pattern's mixer settings
     renderTrackNames()
+
+    // Update sample recorder panel names for pattern-specific tracks (4-7)
+    refreshSampleRecorderNames()
+  }
+
+  /**
+   * Refresh sample recorder panel names from LoopPedal
+   */
+  const refreshSampleRecorderNames = () => {
+    if (!loopTracksContainer) return
+
+    for (let i = 0; i < 8; i++) {
+      const isGlobal = i < 4
+      const defaultName = isGlobal ? `Global Loop ${i + 1}` : `Loop ${i - 3}`
+      const customName = LoopPedal.getTrackName(i)
+      const name = customName || defaultName
+
+      updateSampleRecorderTrackName(i, name)
+    }
   }
 
   /**

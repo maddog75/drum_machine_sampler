@@ -590,12 +590,16 @@ const Sequencer = (() => {
 
     // Add loop tracks (8 total: 4 global + 4 pattern-specific)
     for (let i = 1; i <= 8; i++) {
+      const loopIndex = i - 1  // 0-indexed for LoopPedal
       const isGlobal = i <= 4
-      const name = isGlobal ? `Global Sample ${i}` : `Sample ${i - 4}`
+      // Get custom name from LoopPedal, fallback to default
+      // Global loops (1-4) use "Global Loop X", pattern-specific (5-8) use "Loop X"
+      const defaultName = isGlobal ? `Global Loop ${i}` : `Loop ${i - 4}`
+      const customName = LoopPedal.getTrackName(loopIndex)
       tracks.push({
         id: `loop${i}`,
         instrumentId: `loop${i}`,
-        name: name,
+        name: customName || defaultName,
         trackIndex: 15 + i,  // After drum tracks
         isChangeable: false  // Loop tracks don't change instruments
       })

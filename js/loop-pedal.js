@@ -36,7 +36,9 @@ const LoopPedal = (() => {
   class LoopTrack {
     constructor(index) {
       this.index = index
-      this.name = `Loop ${index + 1}`
+      // Default names: Global Loop 1-4 for indices 0-3, Loop 1-4 for indices 4-7
+      const isGlobal = index < 4
+      this.name = isGlobal ? `Global Loop ${index + 1}` : `Loop ${index - 3}`
       this.audioBuffer = null
       this.webmBlob = null  // Store compressed WebM/Opus blob for efficient storage
       this.source = null
@@ -612,6 +614,31 @@ const LoopPedal = (() => {
   }
 
   /**
+   * Set track name
+   * @param {number} trackIndex - Track index (0-7)
+   * @param {string} name - New track name
+   */
+  const setTrackName = (trackIndex, name) => {
+    if (trackIndex < 0 || trackIndex >= NUM_TRACKS) return
+
+    const trimmedName = (name || '').trim()
+    if (trimmedName) {
+      tracks[trackIndex].name = trimmedName
+      emit('trackNameChanged', { trackIndex, name: trimmedName })
+    }
+  }
+
+  /**
+   * Get track name
+   * @param {number} trackIndex - Track index (0-7)
+   * @returns {string} Track name
+   */
+  const getTrackName = (trackIndex) => {
+    if (trackIndex < 0 || trackIndex >= NUM_TRACKS) return null
+    return tracks[trackIndex].name
+  }
+
+  /**
    * Get track info
    * @param {number} trackIndex - Track index (0-5)
    * @returns {Object} Track information
@@ -854,6 +881,7 @@ const LoopPedal = (() => {
 
   /**
    * Export pattern-specific tracks (4-7) for saving with a pattern
+   * Always saves names for all pattern-specific tracks (even without audio)
    * @returns {Promise<Array>} Array of pattern-specific track data
    */
   const exportPatternTracks = async () => {
@@ -861,31 +889,29 @@ const LoopPedal = (() => {
 
     for (let i = 4; i < NUM_TRACKS; i++) {
       const track = tracks[i]
+      const trackData = {
+        index: i,
+        name: track.name,
+        volume: track.volume,
+        muted: track.muted,
+        solo: track.solo,
+        startTrim: track.startTrim,
+        mixerSettings: { ...track.mixerSettings }
+      }
+
       if (track.webmBlob) {
         // Prefer compressed WebM format (~90% smaller than WAV)
         const webmData = await webmBlobToBase64(track.webmBlob)
-        patternTracksData.push({
-          index: i,
-          name: track.name,
-          audioData: webmData,
-          format: 'webm',  // Mark as compressed WebM format
-          volume: track.volume,
-          muted: track.muted,
-          solo: track.solo
-        })
+        trackData.audioData = webmData
+        trackData.format = 'webm'
       } else if (track.audioBuffer) {
         // Fallback: Convert AudioBuffer to WAV (legacy compatibility)
         const wavData = await audioBufferToWav(track.audioBuffer)
-        patternTracksData.push({
-          index: i,
-          name: track.name,
-          audioData: wavData,
-          format: 'wav',  // Mark as uncompressed WAV format
-          volume: track.volume,
-          muted: track.muted,
-          solo: track.solo
-        })
+        trackData.audioData = wavData
+        trackData.format = 'wav'
       }
+
+      patternTracksData.push(trackData)
     }
 
     return patternTracksData
@@ -896,36 +922,59 @@ const LoopPedal = (() => {
    * @param {Array} patternTracksData - Array of pattern-specific track data
    */
   const importPatternTracks = async (patternTracksData) => {
-    if (!patternTracksData) return
-
-    // Clear pattern-specific tracks (4-7) first
+    // Clear pattern-specific tracks (4-7) first and reset to default names
     for (let i = 4; i < NUM_TRACKS; i++) {
       tracks[i].clear()
+      // Reset to default name: Loop 1, Loop 2, Loop 3, Loop 4
+      tracks[i].name = `Loop ${i - 3}`
+    }
+
+    if (!patternTracksData) {
+      emit('patternTracksImported')
+      return
     }
 
     // Load pattern-specific tracks
     for (const trackData of patternTracksData) {
-      if (trackData.audioData && trackData.index >= 4 && trackData.index < NUM_TRACKS) {
+      if (trackData.index >= 4 && trackData.index < NUM_TRACKS) {
         const track = tracks[trackData.index]
-        let audioBuffer = null
 
-        // Handle both WebM (new compressed format) and WAV (legacy format)
-        if (trackData.format === 'webm') {
-          // New compressed format: Convert Base64 to WebM blob, then decode to AudioBuffer
-          const webmBlob = base64ToWebmBlob(trackData.audioData)
-          audioBuffer = await webmBlobToAudioBuffer(webmBlob)
-          track.webmBlob = webmBlob  // Store compressed blob for efficient re-saving
-        } else {
-          // Legacy WAV format (backward compatibility)
-          audioBuffer = await wavToAudioBuffer(trackData.audioData)
-          // Note: webmBlob will be null, so next save will keep WAV format until re-recorded
+        // Always restore name if provided
+        if (trackData.name) {
+          track.name = trackData.name
         }
 
-        track.audioBuffer = audioBuffer
-        track.name = trackData.name || track.name
-        track.setVolume(trackData.volume || 0.8)
+        // Restore other settings
+        track.setVolume(trackData.volume ?? 0.8)
         track.setMuted(trackData.muted || false)
         track.setSolo(trackData.solo || false)
+        track.setStartTrim(trackData.startTrim || 0)
+
+        // Restore mixer settings if available
+        if (trackData.mixerSettings) {
+          Object.entries(trackData.mixerSettings).forEach(([param, value]) => {
+            track.setMixerParam(param, value)
+          })
+        }
+
+        // Load audio data if present
+        if (trackData.audioData) {
+          let audioBuffer = null
+
+          // Handle both WebM (new compressed format) and WAV (legacy format)
+          if (trackData.format === 'webm') {
+            // New compressed format: Convert Base64 to WebM blob, then decode to AudioBuffer
+            const webmBlob = base64ToWebmBlob(trackData.audioData)
+            audioBuffer = await webmBlobToAudioBuffer(webmBlob)
+            track.webmBlob = webmBlob  // Store compressed blob for efficient re-saving
+          } else {
+            // Legacy WAV format (backward compatibility)
+            audioBuffer = await wavToAudioBuffer(trackData.audioData)
+            // Note: webmBlob will be null, so next save will keep WAV format until re-recorded
+          }
+
+          track.audioBuffer = audioBuffer
+        }
       }
     }
 
@@ -950,6 +999,8 @@ const LoopPedal = (() => {
     setTrackMuted,
     setTrackSolo,
     setTrackStartTrim,
+    setTrackName,
+    getTrackName,
     setTrackMixerParam,
     getTrackMixerSettings,
     getTrackInfo,
