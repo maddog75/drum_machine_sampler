@@ -765,11 +765,18 @@ const Visualizations = (() => {
       window.isMinimized = !window.isMinimized
 
       if (window.isMinimized) {
+        // Stop animation when minimized
+        if (window.animationId) {
+          cancelAnimationFrame(window.animationId)
+          window.animationId = null
+        }
         window.element.querySelector('.viz-content').style.display = 'none'
         window.element.style.height = '40px'
       } else {
         window.element.querySelector('.viz-content').style.display = 'block'
         window.element.style.height = window.options.height + 'px'
+        // Restart animation when restored
+        startVisualization(window)
       }
     }
   }
