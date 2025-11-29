@@ -28,9 +28,26 @@ const AudioEngine = (() => {
   let analyserNode = null
   let audioBuffers = {}
   let trackGainNodes = {}  // Per-track gain nodes for volume control
+  let trackMixerSettings = {}  // Per-track mixer settings (timing, pan, pitch, etc.)
+  let trackAudioNodes = {}  // Per-track audio nodes { panNode, bassFilter, trebleFilter }
   let isInitialized = false
+  let instrumentLibrary = null  // Loaded from instruments.json
+  let instrumentMap = {}  // Quick lookup: instrumentId -> instrument config
+  let loadingPromises = {}  // Track loading promises to prevent duplicate loads
 
-  // Drum sample configurations (TR-808 samples)
+  // Default mixer settings per track
+  const DEFAULT_MIXER_SETTINGS = {
+    timingOffset: 0,    // -200 to +200 ms
+    pan: 0,             // -1 (L) to +1 (R)
+    pitch: 0,           // -12 to +12 semitones
+    attack: 0,          // 0-100 ms
+    decay: 100,         // 0-100% of sample length
+    length: 2,          // 0-2 seconds max playback length
+    bass: 0,            // -12 to +12 dB at 100Hz
+    treble: 0           // -12 to +12 dB at 10kHz
+  }
+
+  // Default drum sample configurations (fallback if instruments.json fails)
   const DRUM_SAMPLES = {
     kick1: { url: 'assets/samples/kick1.wav', name: 'Kick 1' },
     kick2: { url: 'assets/samples/kick2.wav', name: 'Kick 2' },
@@ -108,6 +125,255 @@ const AudioEngine = (() => {
   }
 
   /**
+   * Load the instrument library from instruments.json
+   * @returns {Promise<Object>} The instrument library
+   */
+  const loadInstrumentLibrary = async () => {
+    if (instrumentLibrary) {
+      return instrumentLibrary
+    }
+
+    try {
+      const response = await fetch('assets/instruments.json')
+      instrumentLibrary = await response.json()
+
+      // Build the instrument map for quick lookup
+      instrumentMap = {}
+      for (const category of instrumentLibrary.categories) {
+        for (const instrument of category.instruments) {
+          instrumentMap[instrument.id] = {
+            ...instrument,
+            category: category.id,
+            categoryName: category.name
+          }
+        }
+      }
+
+      console.log(`Loaded instrument library with ${Object.keys(instrumentMap).length} instruments`)
+      return instrumentLibrary
+    } catch (error) {
+      console.error('Failed to load instrument library:', error)
+      // Fallback to default samples
+      instrumentLibrary = { categories: [], defaultInstruments: Object.keys(DRUM_SAMPLES) }
+      for (const [id, sample] of Object.entries(DRUM_SAMPLES)) {
+        instrumentMap[id] = { id, name: sample.name, url: sample.url, category: 'default' }
+      }
+      return instrumentLibrary
+    }
+  }
+
+  /**
+   * Get the instrument library (categories and all instruments)
+   * @returns {Object|null} The instrument library or null if not loaded
+   */
+  const getInstrumentLibrary = () => {
+    return instrumentLibrary
+  }
+
+  /**
+   * Get instrument info by ID
+   * @param {string} instrumentId - The instrument ID
+   * @returns {Object|null} Instrument config or null if not found
+   */
+  const getInstrumentInfo = (instrumentId) => {
+    return instrumentMap[instrumentId] || null
+  }
+
+  /**
+   * Get the default instruments list
+   * @returns {Array<string>} Array of default instrument IDs
+   */
+  const getDefaultInstruments = () => {
+    if (instrumentLibrary && instrumentLibrary.defaultInstruments) {
+      return instrumentLibrary.defaultInstruments
+    }
+    return Object.keys(DRUM_SAMPLES)
+  }
+
+  /**
+   * Load a single instrument sample (lazy loading)
+   * @param {string} instrumentId - The instrument ID to load
+   * @returns {Promise<AudioBuffer|null>} The audio buffer or null on failure
+   */
+  const loadInstrument = async (instrumentId) => {
+    // Already loaded
+    if (audioBuffers[instrumentId]) {
+      return audioBuffers[instrumentId]
+    }
+
+    // Already loading - return existing promise
+    if (loadingPromises[instrumentId]) {
+      return loadingPromises[instrumentId]
+    }
+
+    // Get instrument info
+    const instrument = instrumentMap[instrumentId] || DRUM_SAMPLES[instrumentId]
+    if (!instrument) {
+      console.warn(`Unknown instrument: ${instrumentId}`)
+      return null
+    }
+
+    const url = instrument.url
+
+    // Create loading promise
+    loadingPromises[instrumentId] = (async () => {
+      try {
+        const response = await fetch(url)
+        const arrayBuffer = await response.arrayBuffer()
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+        audioBuffers[instrumentId] = audioBuffer
+        console.log(`Loaded instrument: ${instrument.name || instrumentId}`)
+        return audioBuffer
+      } catch (error) {
+        console.error(`Failed to load instrument ${instrumentId}:`, error)
+        // Create silent buffer as fallback
+        audioBuffers[instrumentId] = audioContext.createBuffer(1, audioContext.sampleRate * 0.1, audioContext.sampleRate)
+        return audioBuffers[instrumentId]
+      } finally {
+        delete loadingPromises[instrumentId]
+      }
+    })()
+
+    return loadingPromises[instrumentId]
+  }
+
+  /**
+   * Ensure a track gain node exists for an instrument
+   * @param {string} instrumentId - The instrument ID
+   */
+  const ensureTrackGain = (instrumentId) => {
+    if (!trackGainNodes[instrumentId] && audioContext) {
+      const trackGain = audioContext.createGain()
+      trackGain.gain.value = 0.8
+      trackGain.connect(masterGainNode)
+      trackGainNodes[instrumentId] = trackGain
+    }
+  }
+
+  /**
+   * Ensure extended audio nodes exist for a track (pan, bass, treble filters)
+   * Creates: bassFilter -> trebleFilter -> panNode -> trackGain
+   * @param {string} instrumentId - The instrument ID
+   */
+  const ensureTrackAudioNodes = (instrumentId) => {
+    if (trackAudioNodes[instrumentId] || !audioContext) return
+
+    // Ensure track gain exists first
+    ensureTrackGain(instrumentId)
+
+    const settings = getTrackMixerSettings(instrumentId)
+
+    // Create stereo panner node
+    const panNode = audioContext.createStereoPanner()
+    panNode.pan.value = settings.pan
+
+    // Create bass filter (peaking EQ at 100Hz)
+    const bassFilter = audioContext.createBiquadFilter()
+    bassFilter.type = 'peaking'
+    bassFilter.frequency.value = 100
+    bassFilter.Q.value = 1
+    bassFilter.gain.value = settings.bass
+
+    // Create treble filter (peaking EQ at 10kHz)
+    const trebleFilter = audioContext.createBiquadFilter()
+    trebleFilter.type = 'peaking'
+    trebleFilter.frequency.value = 10000
+    trebleFilter.Q.value = 1
+    trebleFilter.gain.value = settings.treble
+
+    // Connect: bassFilter -> trebleFilter -> panNode -> trackGain
+    bassFilter.connect(trebleFilter)
+    trebleFilter.connect(panNode)
+    panNode.connect(trackGainNodes[instrumentId])
+
+    trackAudioNodes[instrumentId] = { panNode, bassFilter, trebleFilter }
+  }
+
+  /**
+   * Get mixer settings for a track
+   * @param {string} instrumentId - The instrument ID
+   * @returns {Object} Mixer settings object
+   */
+  const getTrackMixerSettings = (instrumentId) => {
+    if (!trackMixerSettings[instrumentId]) {
+      trackMixerSettings[instrumentId] = { ...DEFAULT_MIXER_SETTINGS }
+    }
+    return trackMixerSettings[instrumentId]
+  }
+
+  /**
+   * Set a mixer parameter for a track
+   * @param {string} instrumentId - The instrument ID
+   * @param {string} param - Parameter name
+   * @param {number} value - Parameter value
+   */
+  const setTrackMixerParam = (instrumentId, param, value) => {
+    const settings = getTrackMixerSettings(instrumentId)
+    settings[param] = value
+
+    // Ensure audio nodes exist for real-time parameter changes (pan, bass, treble)
+    if (['pan', 'bass', 'treble'].includes(param)) {
+      ensureTrackAudioNodes(instrumentId)
+    }
+
+    // Apply to audio nodes if they exist
+    const nodes = trackAudioNodes[instrumentId]
+    if (nodes) {
+      switch (param) {
+        case 'pan':
+          nodes.panNode.pan.value = Math.max(-1, Math.min(1, value))
+          break
+        case 'bass':
+          nodes.bassFilter.gain.value = Math.max(-12, Math.min(12, value))
+          break
+        case 'treble':
+          nodes.trebleFilter.gain.value = Math.max(-12, Math.min(12, value))
+          break
+      }
+    }
+  }
+
+  /**
+   * Export all mixer settings for storage
+   * @returns {Object} All track mixer settings
+   */
+  const exportMixerSettings = () => {
+    return JSON.parse(JSON.stringify(trackMixerSettings))
+  }
+
+  /**
+   * Import mixer settings from storage
+   * @param {Object} settings - Mixer settings to import
+   */
+  const importMixerSettings = (settings) => {
+    trackMixerSettings = settings || {}
+    // Apply settings to existing nodes
+    for (const [instrumentId, mixerSettings] of Object.entries(trackMixerSettings)) {
+      if (trackAudioNodes[instrumentId]) {
+        if (mixerSettings.pan !== undefined) {
+          trackAudioNodes[instrumentId].panNode.pan.value = mixerSettings.pan
+        }
+        if (mixerSettings.bass !== undefined) {
+          trackAudioNodes[instrumentId].bassFilter.gain.value = mixerSettings.bass
+        }
+        if (mixerSettings.treble !== undefined) {
+          trackAudioNodes[instrumentId].trebleFilter.gain.value = mixerSettings.treble
+        }
+      }
+    }
+  }
+
+  /**
+   * Preload instruments for a specific list of IDs
+   * @param {Array<string>} instrumentIds - Array of instrument IDs to preload
+   * @returns {Promise<void>}
+   */
+  const preloadInstruments = async (instrumentIds) => {
+    const loadPromises = instrumentIds.map(id => loadInstrument(id))
+    await Promise.all(loadPromises)
+  }
+
+  /**
    * Load drum samples from WAV files
    * @returns {Promise<void>}
    */
@@ -155,14 +421,25 @@ const AudioEngine = (() => {
   }
 
   /**
-   * Play a drum sample
+   * Play a drum sample with full mixer support
    * @param {string} instrument - Name of the instrument to play
    * @param {number} time - Time to play (AudioContext time, defaults to now)
    * @param {number} velocity - Hit velocity (0.0 - 1.0)
    */
   const playDrum = (instrument, time = null, velocity = 1.0) => {
-    if (!audioContext || !audioBuffers[instrument]) {
-      console.warn(`Instrument not found: ${instrument}`)
+    if (!audioContext) {
+      console.warn('Audio context not initialized')
+      return
+    }
+
+    // Try to load instrument if not loaded
+    if (!audioBuffers[instrument]) {
+      // Lazy load and play immediately
+      loadInstrument(instrument).then(() => {
+        if (audioBuffers[instrument]) {
+          playDrum(instrument, null, velocity)
+        }
+      })
       return
     }
 
@@ -171,25 +448,88 @@ const AudioEngine = (() => {
       audioContext.resume()
     }
 
+    // Ensure audio nodes exist for this instrument
+    ensureTrackGain(instrument)
+    ensureTrackAudioNodes(instrument)
+
+    const settings = getTrackMixerSettings(instrument)
+    const buffer = audioBuffers[instrument]
+
     // Create source node
     const source = audioContext.createBufferSource()
-    source.buffer = audioBuffers[instrument]
+    source.buffer = buffer
 
-    // Create gain node for velocity
+    // Apply pitch shift (playbackRate = 2^(semitones/12))
+    const pitchSemitones = settings.pitch || 0
+    source.playbackRate.value = Math.pow(2, pitchSemitones / 12)
+
+    // Create gain node for velocity and attack envelope
     const gainNode = audioContext.createGain()
-    gainNode.gain.value = Math.max(0, Math.min(1, velocity))
 
-    // Connect nodes: source -> velocity gain -> track gain -> master gain
-    source.connect(gainNode)
-    if (trackGainNodes[instrument]) {
-      gainNode.connect(trackGainNodes[instrument])
+    // Calculate start time with timing offset
+    const timingOffset = settings.timingOffset || 0
+    const baseTime = time || audioContext.currentTime
+    const startTime = Math.max(audioContext.currentTime, baseTime + (timingOffset / 1000))
+
+    // Apply attack envelope
+    const attackMs = settings.attack || 0
+    if (attackMs > 0) {
+      gainNode.gain.setValueAtTime(0, startTime)
+      gainNode.gain.linearRampToValueAtTime(velocity, startTime + (attackMs / 1000))
     } else {
-      gainNode.connect(masterGainNode)  // Fallback if track gain not found
+      gainNode.gain.value = Math.max(0, Math.min(1, velocity))
     }
 
-    // Schedule playback
-    const startTime = time || audioContext.currentTime
+    // Connect through extended audio chain
+    const nodes = trackAudioNodes[instrument]
+    if (nodes) {
+      source.connect(gainNode)
+      gainNode.connect(nodes.bassFilter)  // First node in extended chain
+    } else {
+      source.connect(gainNode)
+      gainNode.connect(trackGainNodes[instrument] || masterGainNode)
+    }
+
+    // Calculate buffer duration adjusted for pitch
+    const adjustedDuration = buffer.duration / source.playbackRate.value
+
+    // Apply length limit (absolute time in seconds)
+    const maxLength = settings.length ?? 2
+    const playDuration = Math.min(adjustedDuration, maxLength)
+
+    // Apply decay as fade-out envelope
+    // Decay 100% = no fade (sustain full volume)
+    // Decay 50% = fade starts at 50%, reaches 0 at end
+    // Decay 0% = fade starts immediately (entire sample fades out)
+    const decayPercent = (settings.decay ?? 100) / 100
+    const sustainTime = playDuration * decayPercent
+    const fadeTime = playDuration - sustainTime
+
+    // Set up the envelope
+    const peakGain = gainNode.gain.value
+    if (fadeTime > 0.001) {
+      // Hold at peak until sustain ends, then fade to 0
+      gainNode.gain.setValueAtTime(peakGain, startTime + sustainTime)
+      gainNode.gain.linearRampToValueAtTime(0, startTime + playDuration)
+    }
+
+    // Start playback
     source.start(startTime)
+
+    // Stop at the end of play duration (with small buffer for fade)
+    if (playDuration < adjustedDuration) {
+      source.stop(startTime + playDuration + 0.01)
+    }
+  }
+
+  /**
+   * Preview an instrument (play immediately without scheduling)
+   * @param {string} instrumentId - The instrument ID to preview
+   * @param {number} velocity - Hit velocity (0.0 - 1.0)
+   */
+  const previewInstrument = async (instrumentId, velocity = 0.8) => {
+    await loadInstrument(instrumentId)
+    playDrum(instrumentId, null, velocity)
   }
 
   /**
@@ -208,6 +548,8 @@ const AudioEngine = (() => {
    * @param {number} volume - Volume level (0.0 - 1.0)
    */
   const setTrackVolume = (instrument, volume) => {
+    // Ensure track gain node exists for this instrument
+    ensureTrackGain(instrument)
     if (trackGainNodes[instrument]) {
       trackGainNodes[instrument].gain.value = Math.max(0, Math.min(1, volume))
     }
@@ -301,6 +643,21 @@ const AudioEngine = (() => {
     getInstruments,
     getSampleBuffer,
     getMasterGain,
-    isReady
+    isReady,
+    // New instrument library methods
+    loadInstrumentLibrary,
+    getInstrumentLibrary,
+    getInstrumentInfo,
+    getDefaultInstruments,
+    loadInstrument,
+    preloadInstruments,
+    previewInstrument,
+    ensureTrackGain,
+    // Mixer settings methods
+    getTrackMixerSettings,
+    setTrackMixerParam,
+    exportMixerSettings,
+    importMixerSettings,
+    DEFAULT_MIXER_SETTINGS
   }
 })()

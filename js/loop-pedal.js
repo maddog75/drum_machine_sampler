@@ -47,10 +47,27 @@ const LoopPedal = (() => {
       this.isPlaying = false
       this.isRecording = false
       this.startTrim = 0  // Trim from start of sample in seconds (0-5s)
+
+      // Mixer settings for extended controls
+      this.mixerSettings = {
+        timingOffset: 0,    // -200 to +200 ms
+        pan: 0,             // -1 (L) to +1 (R)
+        pitch: 0,           // -12 to +12 semitones
+        attack: 0,          // 0-100 ms
+        decay: 100,         // 0-100% of sample length
+        bass: 0,            // -12 to +12 dB at 100Hz
+        treble: 0           // -12 to +12 dB at 10kHz
+      }
+
+      // Extended audio nodes
+      this.panNode = null
+      this.bassFilter = null
+      this.trebleFilter = null
     }
 
     /**
      * Initialize audio nodes (call after AudioContext is ready)
+     * Creates: bassFilter -> trebleFilter -> panNode -> gainNode -> masterGain
      */
     initAudioNodes() {
       if (this.gainNode) return // Already initialized
@@ -58,10 +75,54 @@ const LoopPedal = (() => {
       const context = AudioEngine.getContext()
       const masterGain = AudioEngine.getMasterGain()
       if (context && masterGain) {
+        // Create gain node
         this.gainNode = context.createGain()
         this.gainNode.gain.value = this.muted ? 0 : this.volume
-        // Connect to master gain instead of destination to route through effects
+
+        // Create pan node
+        this.panNode = context.createStereoPanner()
+        this.panNode.pan.value = this.mixerSettings.pan
+
+        // Create bass filter (peaking EQ at 100Hz)
+        this.bassFilter = context.createBiquadFilter()
+        this.bassFilter.type = 'peaking'
+        this.bassFilter.frequency.value = 100
+        this.bassFilter.Q.value = 1
+        this.bassFilter.gain.value = this.mixerSettings.bass
+
+        // Create treble filter (peaking EQ at 10kHz)
+        this.trebleFilter = context.createBiquadFilter()
+        this.trebleFilter.type = 'peaking'
+        this.trebleFilter.frequency.value = 10000
+        this.trebleFilter.Q.value = 1
+        this.trebleFilter.gain.value = this.mixerSettings.treble
+
+        // Connect: bassFilter -> trebleFilter -> panNode -> gainNode -> masterGain
+        this.bassFilter.connect(this.trebleFilter)
+        this.trebleFilter.connect(this.panNode)
+        this.panNode.connect(this.gainNode)
         this.gainNode.connect(masterGain)
+      }
+    }
+
+    /**
+     * Set a mixer parameter
+     * @param {string} param - Parameter name
+     * @param {number} value - Parameter value
+     */
+    setMixerParam(param, value) {
+      this.mixerSettings[param] = value
+
+      switch (param) {
+        case 'pan':
+          if (this.panNode) this.panNode.pan.value = Math.max(-1, Math.min(1, value))
+          break
+        case 'bass':
+          if (this.bassFilter) this.bassFilter.gain.value = Math.max(-12, Math.min(12, value))
+          break
+        case 'treble':
+          if (this.trebleFilter) this.trebleFilter.gain.value = Math.max(-12, Math.min(12, value))
+          break
       }
     }
 
@@ -120,7 +181,38 @@ const LoopPedal = (() => {
       this.source = context.createBufferSource()
       this.source.buffer = this.audioBuffer
       this.source.loop = loop
-      this.source.connect(this.gainNode)
+
+      // Apply pitch shift (playbackRate = 2^(semitones/12))
+      const pitchSemitones = this.mixerSettings.pitch || 0
+      this.source.playbackRate.value = Math.pow(2, pitchSemitones / 12)
+
+      // Connect source to extended audio chain (bassFilter is first node)
+      if (this.bassFilter) {
+        this.source.connect(this.bassFilter)
+      } else {
+        this.source.connect(this.gainNode)
+      }
+
+      // Calculate timing offset
+      const timingOffset = this.mixerSettings.timingOffset || 0
+      const baseTime = startTime || context.currentTime
+      const effectiveStartTime = Math.max(context.currentTime, baseTime + (timingOffset / 1000))
+
+      // Apply attack envelope
+      const attackMs = this.mixerSettings.attack || 0
+      if (attackMs > 0) {
+        this.gainNode.gain.setValueAtTime(0, effectiveStartTime)
+        this.gainNode.gain.linearRampToValueAtTime(
+          this.muted ? 0 : this.volume,
+          effectiveStartTime + (attackMs / 1000)
+        )
+      } else {
+        this.gainNode.gain.value = this.muted ? 0 : this.volume
+      }
+
+      // Calculate adjusted duration for decay
+      const adjustedDuration = (this.audioBuffer.duration - this.startTrim) / this.source.playbackRate.value
+      const decayPercent = (this.mixerSettings.decay ?? 100) / 100
 
       // Handle one-shot playback
       if (!loop) {
@@ -130,8 +222,13 @@ const LoopPedal = (() => {
         }
       }
 
-      const time = startTime || context.currentTime
-      this.source.start(time, this.startTrim)  // Apply start trim offset
+      this.source.start(effectiveStartTime, this.startTrim)  // Apply start trim offset
+
+      // Stop early if decay is less than 100% (only for one-shot mode)
+      if (decayPercent < 1 && !loop) {
+        this.source.stop(effectiveStartTime + (adjustedDuration * decayPercent))
+      }
+
       this.isPlaying = loop // Only mark as playing if looping
     }
 
@@ -533,8 +630,31 @@ const LoopPedal = (() => {
       solo: track.solo,
       isPlaying: track.isPlaying,
       isRecording: track.isRecording,
-      startTrim: track.startTrim
+      startTrim: track.startTrim,
+      mixerSettings: { ...track.mixerSettings }
     }
+  }
+
+  /**
+   * Set mixer parameter for a loop track
+   * @param {number} trackIndex - Track index (0-7)
+   * @param {string} param - Parameter name
+   * @param {number} value - Parameter value
+   */
+  const setTrackMixerParam = (trackIndex, param, value) => {
+    if (trackIndex < 0 || trackIndex >= NUM_TRACKS) return
+    tracks[trackIndex].setMixerParam(param, value)
+    emit('trackMixerParamChanged', { trackIndex, param, value })
+  }
+
+  /**
+   * Get mixer settings for a loop track
+   * @param {number} trackIndex - Track index (0-7)
+   * @returns {Object} Mixer settings
+   */
+  const getTrackMixerSettings = (trackIndex) => {
+    if (trackIndex < 0 || trackIndex >= NUM_TRACKS) return null
+    return { ...tracks[trackIndex].mixerSettings }
   }
 
   /**
@@ -601,7 +721,8 @@ const LoopPedal = (() => {
           volume: track.volume,
           muted: track.muted,
           solo: track.solo,
-          startTrim: track.startTrim
+          startTrim: track.startTrim,
+          mixerSettings: { ...track.mixerSettings }
         })
       } else if (track.audioBuffer) {
         // Fallback: Convert AudioBuffer to base64-encoded WAV (legacy)
@@ -614,7 +735,8 @@ const LoopPedal = (() => {
           volume: track.volume,
           muted: track.muted,
           solo: track.solo,
-          startTrim: track.startTrim
+          startTrim: track.startTrim,
+          mixerSettings: { ...track.mixerSettings }
         })
       }
     }
@@ -656,6 +778,13 @@ const LoopPedal = (() => {
         track.setMuted(trackData.muted || false)
         track.setSolo(trackData.solo || false)
         track.setStartTrim(trackData.startTrim || 0)
+
+        // Restore mixer settings if available
+        if (trackData.mixerSettings) {
+          Object.entries(trackData.mixerSettings).forEach(([param, value]) => {
+            track.setMixerParam(param, value)
+          })
+        }
       }
     }
 
@@ -821,6 +950,8 @@ const LoopPedal = (() => {
     setTrackMuted,
     setTrackSolo,
     setTrackStartTrim,
+    setTrackMixerParam,
+    getTrackMixerSettings,
     getTrackInfo,
     getAllTracksInfo,
     getMicInputLevel,

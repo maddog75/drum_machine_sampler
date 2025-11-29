@@ -72,7 +72,7 @@
     setupFirstInteraction()
 
     // Initialize all modules
-    Sequencer.init()
+    await Sequencer.init()
     LoopPedal.init()
     SongMode.init()
     Visualizations.init()

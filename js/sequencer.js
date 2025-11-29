@@ -35,11 +35,32 @@ const Sequencer = (() => {
   let scheduleAheadTime = 0.1 // How far ahead to schedule (100ms)
   let lookAhead = 25 // How often to check for notes to schedule (25ms)
   let listeners = {}
+  let trackInstruments = null  // Per-pattern instrument assignments (16 elements)
+
+  /**
+   * Initialize track instruments with defaults
+   * @param {Array<string>} [copyFrom] - Optional instrument array to copy from
+   */
+  const initTrackInstruments = (copyFrom = null) => {
+    if (copyFrom && Array.isArray(copyFrom) && copyFrom.length === 16) {
+      trackInstruments = [...copyFrom]
+    } else {
+      // Use default instruments from audio engine
+      const defaults = AudioEngine.getDefaultInstruments()
+      trackInstruments = defaults.slice(0, 16)
+    }
+  }
 
   /**
    * Initialize the sequencer
    */
-  const init = () => {
+  const init = async () => {
+    // Load instrument library first
+    await AudioEngine.loadInstrumentLibrary()
+
+    // Initialize track instruments with defaults
+    initTrackInstruments()
+
     // Load first preset as default
     const patterns = Presets.getDrumPatterns()
     if (patterns.length > 0) {
@@ -48,6 +69,48 @@ const Sequencer = (() => {
 
     // Initialize loop tracks in pattern
     initializeLoopTracks()
+  }
+
+  /**
+   * Set instrument for a specific track
+   * @param {number} trackIndex - Track index (0-15)
+   * @param {string} instrumentId - Instrument ID from instruments.json
+   */
+  const setTrackInstrument = (trackIndex, instrumentId) => {
+    if (trackIndex < 0 || trackIndex >= 16) return
+    if (!trackInstruments) {
+      initTrackInstruments()
+    }
+    trackInstruments[trackIndex] = instrumentId
+
+    // Preload the instrument sample
+    AudioEngine.loadInstrument(instrumentId)
+
+    emit('trackInstrumentChanged', { trackIndex, instrumentId })
+  }
+
+  /**
+   * Get instrument for a specific track
+   * @param {number} trackIndex - Track index (0-15)
+   * @returns {string} Instrument ID
+   */
+  const getTrackInstrument = (trackIndex) => {
+    if (trackIndex < 0 || trackIndex >= 16) return null
+    if (!trackInstruments) {
+      initTrackInstruments()
+    }
+    return trackInstruments[trackIndex]
+  }
+
+  /**
+   * Get all track instruments
+   * @returns {Array<string>} Array of 16 instrument IDs
+   */
+  const getTrackInstruments = () => {
+    if (!trackInstruments) {
+      initTrackInstruments()
+    }
+    return [...trackInstruments]
   }
 
   /**
@@ -253,13 +316,20 @@ const Sequencer = (() => {
   const scheduleNote = (step, time) => {
     if (!currentPattern) return
 
+    // Ensure track instruments are initialized
+    if (!trackInstruments) {
+      initTrackInstruments()
+    }
+
     // Play all drum instruments for this step
-    const instruments = AudioEngine.getInstruments()
-    instruments.forEach(instrument => {
-      const value = currentPattern.pattern[instrument.id]?.[step]
+    // Use default instrument IDs for pattern data lookup, but play the assigned instrument
+    const defaultInstruments = AudioEngine.getDefaultInstruments()
+    defaultInstruments.forEach((defaultInstrumentId, trackIndex) => {
+      const value = currentPattern.pattern[defaultInstrumentId]?.[step]
       if (value) {
-        // Play the drum hit with Web Audio API precise timing
-        AudioEngine.playDrum(instrument.id, time, value)
+        // Play the assigned instrument (may differ from default)
+        const instrumentToPlay = trackInstruments[trackIndex] || defaultInstrumentId
+        AudioEngine.playDrum(instrumentToPlay, time, value)
       }
     })
 
@@ -494,14 +564,29 @@ const Sequencer = (() => {
 
   /**
    * Get all tracks (drums + loops) for UI rendering
-   * @returns {Array} Array of track objects with id and name
+   * @returns {Array} Array of track objects with id, name, defaultId, and trackIndex
    */
   const getAllTracks = () => {
     const tracks = []
 
-    // Add drum instruments
-    const drumInstruments = AudioEngine.getInstruments()
-    tracks.push(...drumInstruments)
+    // Ensure track instruments are initialized
+    if (!trackInstruments) {
+      initTrackInstruments()
+    }
+
+    // Add drum instruments with current instrument assignments
+    const defaultInstruments = AudioEngine.getDefaultInstruments()
+    defaultInstruments.forEach((defaultId, trackIndex) => {
+      const currentInstrumentId = trackInstruments[trackIndex] || defaultId
+      const instrumentInfo = AudioEngine.getInstrumentInfo(currentInstrumentId)
+      tracks.push({
+        id: defaultId,  // Pattern data key (always the default)
+        instrumentId: currentInstrumentId,  // Actual instrument assigned
+        name: instrumentInfo ? instrumentInfo.name : currentInstrumentId,
+        trackIndex: trackIndex,
+        isChangeable: true  // Drum tracks can change instruments
+      })
+    })
 
     // Add loop tracks (8 total: 4 global + 4 pattern-specific)
     for (let i = 1; i <= 8; i++) {
@@ -509,7 +594,10 @@ const Sequencer = (() => {
       const name = isGlobal ? `Global Sample ${i}` : `Sample ${i - 4}`
       tracks.push({
         id: `loop${i}`,
-        name: name
+        instrumentId: `loop${i}`,
+        name: name,
+        trackIndex: 15 + i,  // After drum tracks
+        isChangeable: false  // Loop tracks don't change instruments
       })
     }
 
@@ -527,7 +615,9 @@ const Sequencer = (() => {
       timeSignature,
       stepCount,
       currentStep,
-      isPlaying
+      isPlaying,
+      trackInstruments: trackInstruments ? [...trackInstruments] : null,
+      drumMixerSettings: AudioEngine.exportMixerSettings()
     }
   }
 
@@ -566,6 +656,20 @@ const Sequencer = (() => {
       stepCount = data.stepCount
       emit('stepCountChanged', stepCount)
     }
+    // Restore track instruments if available
+    if (data.trackInstruments && Array.isArray(data.trackInstruments)) {
+      initTrackInstruments(data.trackInstruments)
+      emit('trackInstrumentsLoaded', trackInstruments)
+    } else {
+      // Initialize with defaults if not present
+      initTrackInstruments()
+    }
+
+    // Restore drum mixer settings if available
+    if (data.drumMixerSettings) {
+      AudioEngine.importMixerSettings(data.drumMixerSettings)
+      emit('mixerSettingsLoaded', data.drumMixerSettings)
+    }
   }
 
   // Public API
@@ -597,6 +701,10 @@ const Sequencer = (() => {
     getNextBarTime,
     getAllTracks,
     exportPattern,
-    importPattern
+    importPattern,
+    // Track instrument management
+    setTrackInstrument,
+    getTrackInstrument,
+    getTrackInstruments
   }
 })()

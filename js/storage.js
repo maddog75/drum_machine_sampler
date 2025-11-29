@@ -33,13 +33,14 @@ const Storage = (() => {
   const saveSession = async () => {
     try {
       const session = {
-        version: '2.0.0', // Incremented for pattern bank support
+        version: '2.1.0', // Incremented for per-track mixer controls
         timestamp: new Date().toISOString(),
         theme: document.body.dataset.theme || 'dark',
         sequencer: Sequencer.exportPattern(),
         loopPedal: await LoopPedal.exportData(),
         patternBank: SongMode.exportPatternBank(),
-        effects: Effects.getSettings()
+        effects: Effects.getSettings(),
+        drumMixerSettings: AudioEngine.exportMixerSettings()
       }
 
       const sessionJson = JSON.stringify(session)
@@ -103,8 +104,14 @@ const Storage = (() => {
         UI.updateEffectsUI()
       }
 
+      // Restore drum mixer settings (v2.1.0+)
+      if (session.drumMixerSettings) {
+        AudioEngine.importMixerSettings(session.drumMixerSettings)
+      }
+
       // Refresh UI to show restored data
       UI.renderSequencerGrid()
+      UI.renderTrackNames()
       UI.updateLoopTrackDurations()
       UI.updateChainModeUI()
 
@@ -122,13 +129,14 @@ const Storage = (() => {
   const exportSessionFile = async () => {
     try {
       const session = {
-        version: '2.0.0', // Incremented for pattern bank support
+        version: '2.1.0', // Incremented for per-track mixer controls
         timestamp: new Date().toISOString(),
         theme: document.body.dataset.theme || 'dark',
         sequencer: Sequencer.exportPattern(),
         loopPedal: await LoopPedal.exportData(),
         patternBank: SongMode.exportPatternBank(),
-        effects: Effects.getSettings()
+        effects: Effects.getSettings(),
+        drumMixerSettings: AudioEngine.exportMixerSettings()
       }
 
       const json = JSON.stringify(session, null, 2)
@@ -194,8 +202,14 @@ const Storage = (() => {
         UI.updateEffectsUI()
       }
 
+      // Restore drum mixer settings (v2.1.0+)
+      if (session.drumMixerSettings) {
+        AudioEngine.importMixerSettings(session.drumMixerSettings)
+      }
+
       // Refresh UI
       UI.renderSequencerGrid()
+      UI.renderTrackNames()
       UI.updateLoopTrackDurations()
       UI.updateChainModeUI()
 

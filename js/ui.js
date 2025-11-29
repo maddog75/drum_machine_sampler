@@ -250,8 +250,71 @@ const UI = (() => {
     }
   }
 
+  // Mixer knob configuration
+  const MIXER_KNOB_CONFIGS = [
+    { param: 'volume', label: 'Vol', min: 0, max: 1, default: 0.8, color: 'volume' },
+    { param: 'timingOffset', label: 'Ofs', min: -200, max: 200, default: 0, color: 'offset' },
+    { param: 'pan', label: 'Pan', min: -1, max: 1, default: 0, color: 'pan' },
+    { param: 'pitch', label: 'Pit', min: -12, max: 12, default: 0, color: 'pitch' },
+    { param: 'attack', label: 'Atk', min: 0, max: 100, default: 0, color: 'attack' },
+    { param: 'decay', label: 'Dec', min: 0, max: 100, default: 100, color: 'decay' },
+    { param: 'length', label: 'Len', min: 0, max: 2, default: 2, color: 'length' },
+    { param: 'bass', label: 'Bas', min: -12, max: 12, default: 0, color: 'bass' },
+    { param: 'treble', label: 'Trb', min: -12, max: 12, default: 0, color: 'treble' }
+  ]
+
   /**
-   * Render track names
+   * Format knob value for tooltip display
+   */
+  const formatKnobValue = (param, value) => {
+    switch (param) {
+      case 'volume': return `${Math.round(value * 100)}%`
+      case 'timingOffset': return `${value > 0 ? '+' : ''}${Math.round(value)}ms`
+      case 'pan': return value === 0 ? 'C' : (value < 0 ? `L${Math.abs(Math.round(value * 100))}` : `R${Math.round(value * 100)}`)
+      case 'pitch': return `${value > 0 ? '+' : ''}${Math.round(value)}st`
+      case 'attack': return `${Math.round(value)}ms`
+      case 'decay': return `${Math.round(value)}%`
+      case 'length': return `${value.toFixed(2)}s`
+      case 'bass':
+      case 'treble': return `${value > 0 ? '+' : ''}${Math.round(value)}dB`
+      default: return value.toString()
+    }
+  }
+
+  /**
+   * Create a single mixer knob element
+   */
+  const createMixerKnob = (trackId, config, value, isLoopTrack, loopTrackIndex) => {
+    const container = document.createElement('div')
+    container.className = `mixer-knob mixer-knob--${config.color}`
+    container.dataset.instrument = trackId
+    container.dataset.param = config.param
+    container.dataset.min = config.min
+    container.dataset.max = config.max
+    if (isLoopTrack) {
+      container.dataset.isLoop = 'true'
+      container.dataset.loopTrack = loopTrackIndex
+    }
+    container.title = `${config.label}: ${formatKnobValue(config.param, value)}`
+
+    const normalizedValue = (value - config.min) / (config.max - config.min)
+    const rotation = -135 + normalizedValue * 270
+
+    container.innerHTML = `
+      <svg class="mixer-knob__svg" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" class="mixer-knob__bg"/>
+        <line x1="12" y1="12" x2="12" y2="4"
+              class="mixer-knob__indicator"
+              style="transform: rotate(${rotation}deg)"/>
+      </svg>
+      <span class="mixer-knob__label">${config.label}</span>
+    `
+
+    return container
+  }
+
+  /**
+   * Render track names with 8 mixer knobs each
    */
   const renderTrackNames = () => {
     if (!trackNamesContainer) return
@@ -273,48 +336,151 @@ const UI = (() => {
       const label = document.createElement('span')
       label.className = 'track-name__label'
       label.textContent = track.name
-      nameDiv.appendChild(label)
 
-      // Add volume knob for all tracks (drum and loop)
-      const knobContainer = document.createElement('div')
-      knobContainer.className = 'volume-knob-container'
-      knobContainer.dataset.instrument = track.id
-
-      let volume
-      if (track.id.startsWith('loop')) {
-        // Loop track - get volume from LoopPedal
-        const trackIndex = parseInt(track.id.replace('loop', ''), 10) - 1
-        const trackInfo = LoopPedal.getTrackInfo(trackIndex)
-        volume = trackInfo ? trackInfo.volume : 0.8
-        knobContainer.dataset.loopTrack = trackIndex
-      } else {
-        // Drum track - get volume from AudioEngine
-        volume = AudioEngine.getTrackVolume(track.id)
+      // Add click handler for changeable tracks (drum tracks)
+      if (track.isChangeable) {
+        label.classList.add('track-name__label--changeable')
+        label.dataset.trackIndex = track.trackIndex
+        label.addEventListener('click', (e) => {
+          e.stopPropagation()
+          showInstrumentPicker(track.trackIndex, track.instrumentId)
+        })
       }
 
-      const rotation = -135 + (volume * 270) // -135° to +135° = 270° range
+      nameDiv.appendChild(label)
 
-      knobContainer.innerHTML = `
-        <svg class="volume-knob" viewBox="0 0 50 50">
-          <circle cx="25" cy="25" r="20" class="volume-knob__bg"/>
-          <line
-            x1="25"
-            y1="25"
-            x2="25"
-            y2="10"
-            class="volume-knob__indicator"
-            style="transform: rotate(${rotation}deg)"
-          />
-        </svg>
-      `
+      // Determine if this is a loop track and get mixer settings
+      const isLoopTrack = track.id.startsWith('loop')
+      let mixerSettings, currentVolume, loopTrackIndex
 
-      nameDiv.appendChild(knobContainer)
+      if (isLoopTrack) {
+        loopTrackIndex = parseInt(track.id.replace('loop', ''), 10) - 1
+        const trackInfo = LoopPedal.getTrackInfo(loopTrackIndex)
+        mixerSettings = trackInfo?.mixerSettings || {}
+        currentVolume = trackInfo ? trackInfo.volume : 0.8
+      } else {
+        // Use the assigned instrument ID for mixer settings (not the default track ID)
+        // This ensures knobs affect the correct instrument when a different sample is loaded
+        mixerSettings = AudioEngine.getTrackMixerSettings(track.instrumentId) || {}
+        currentVolume = AudioEngine.getTrackVolume(track.instrumentId)
+      }
+
+      // Create mixer knobs - use instrumentId for drum tracks so settings apply to the assigned instrument
+      const knobInstrumentId = isLoopTrack ? track.id : track.instrumentId
+      MIXER_KNOB_CONFIGS.forEach(config => {
+        const value = config.param === 'volume'
+          ? currentVolume
+          : (mixerSettings[config.param] ?? config.default)
+
+        const knobContainer = createMixerKnob(knobInstrumentId, config, value, isLoopTrack, loopTrackIndex)
+        nameDiv.appendChild(knobContainer)
+      })
 
       trackNamesContainer.appendChild(nameDiv)
     })
 
-    // Add knob drag handlers
-    setupVolumeKnobHandlers()
+    // Add mixer knob drag handlers
+    setupMixerKnobHandlers()
+  }
+
+  /**
+   * Mixer knob drag handling
+   */
+  let draggedMixerKnob = null
+  let mixerDragStartY = 0
+  let mixerDragStartValue = 0
+
+  const setupMixerKnobHandlers = () => {
+    const knobs = document.querySelectorAll('.mixer-knob')
+    knobs.forEach(knob => {
+      knob.addEventListener('mousedown', handleMixerKnobMouseDown)
+    })
+  }
+
+  const handleMixerKnobMouseDown = (e) => {
+    e.preventDefault()
+    const knob = e.currentTarget
+
+    draggedMixerKnob = knob
+    mixerDragStartY = e.clientY
+
+    const param = knob.dataset.param
+    const min = parseFloat(knob.dataset.min)
+    const max = parseFloat(knob.dataset.max)
+    const instrumentId = knob.dataset.instrument
+    const isLoop = knob.dataset.isLoop === 'true'
+
+    // Get current value
+    if (isLoop) {
+      const trackIndex = parseInt(knob.dataset.loopTrack, 10)
+      if (param === 'volume') {
+        const trackInfo = LoopPedal.getTrackInfo(trackIndex)
+        mixerDragStartValue = trackInfo ? trackInfo.volume : 0.8
+      } else {
+        const settings = LoopPedal.getTrackMixerSettings(trackIndex)
+        mixerDragStartValue = settings?.[param] ?? ((min + max) / 2)
+      }
+    } else {
+      if (param === 'volume') {
+        mixerDragStartValue = AudioEngine.getTrackVolume(instrumentId)
+      } else {
+        const settings = AudioEngine.getTrackMixerSettings(instrumentId)
+        mixerDragStartValue = settings?.[param] ?? ((min + max) / 2)
+      }
+    }
+
+    document.addEventListener('mousemove', handleMixerKnobMouseMove)
+    document.addEventListener('mouseup', handleMixerKnobMouseUp)
+  }
+
+  const handleMixerKnobMouseMove = (e) => {
+    if (!draggedMixerKnob) return
+
+    const param = draggedMixerKnob.dataset.param
+    const min = parseFloat(draggedMixerKnob.dataset.min)
+    const max = parseFloat(draggedMixerKnob.dataset.max)
+    const instrumentId = draggedMixerKnob.dataset.instrument
+    const isLoop = draggedMixerKnob.dataset.isLoop === 'true'
+
+    const deltaY = mixerDragStartY - e.clientY  // Up = increase
+    const range = max - min
+    const sensitivity = range / 100  // 100px for full range
+    const newValue = Math.max(min, Math.min(max, mixerDragStartValue + deltaY * sensitivity))
+
+    // Apply value
+    if (isLoop) {
+      const trackIndex = parseInt(draggedMixerKnob.dataset.loopTrack, 10)
+      if (param === 'volume') {
+        LoopPedal.setTrackVolume(trackIndex, newValue)
+        updateSampleRecorderVolumeSlider(trackIndex, newValue)
+      } else {
+        LoopPedal.setTrackMixerParam(trackIndex, param, newValue)
+      }
+    } else {
+      if (param === 'volume') {
+        AudioEngine.setTrackVolume(instrumentId, newValue)
+      } else {
+        AudioEngine.setTrackMixerParam(instrumentId, param, newValue)
+      }
+    }
+
+    // Update knob rotation
+    const normalizedValue = (newValue - min) / (max - min)
+    const rotation = -135 + normalizedValue * 270
+    const indicator = draggedMixerKnob.querySelector('.mixer-knob__indicator')
+    if (indicator) {
+      indicator.style.transform = `rotate(${rotation}deg)`
+    }
+
+    // Update tooltip
+    const config = MIXER_KNOB_CONFIGS.find(c => c.param === param)
+    draggedMixerKnob.title = `${config?.label || param}: ${formatKnobValue(param, newValue)}`
+  }
+
+  const handleMixerKnobMouseUp = () => {
+    draggedMixerKnob = null
+    document.removeEventListener('mousemove', handleMixerKnobMouseMove)
+    document.removeEventListener('mouseup', handleMixerKnobMouseUp)
   }
 
   /**
@@ -477,18 +643,30 @@ const UI = (() => {
         // Highlight current step
         const isHighlighted = col === currentHighlightedStep
 
-        // Draw cell background with group highlighting
-        if (isActive) {
-          ctx.fillStyle = isHighlighted ? colors.highlight : colors.active
-        } else if (isHighlighted) {
+        // Draw cell background (group highlight, playhead highlight, or normal)
+        if (isHighlighted && !isActive) {
           ctx.fillStyle = colors.grid
         } else if (isGroupStart) {
-          // Lighter background for first column of each group
           ctx.fillStyle = colors.groupHighlight
         } else {
           ctx.fillStyle = colors.background
         }
-        ctx.fillRect(x + 2, y + 2, gridCellWidth - 4, gridCellHeight - 4)
+        ctx.fillRect(x + 1, y + 1, gridCellWidth - 2, gridCellHeight - 2)
+
+        // Draw pill shape for active cells
+        if (isActive) {
+          const margin = 4
+          const pillX = x + margin
+          const pillY = y + margin
+          const pillWidth = gridCellWidth - margin * 2
+          const pillHeight = gridCellHeight - margin * 2
+          const radius = Math.min(pillWidth, pillHeight) / 2
+
+          ctx.fillStyle = isHighlighted ? colors.highlight : colors.active
+          ctx.beginPath()
+          ctx.roundRect(pillX, pillY, pillWidth, pillHeight, radius)
+          ctx.fill()
+        }
 
         // Draw grid lines
         ctx.strokeStyle = colors.grid
@@ -846,6 +1024,14 @@ const UI = (() => {
       }
       renderSequencerGrid()
     })
+
+    // Listen for track instrument changes to update track names
+    Sequencer.on('trackInstrumentChanged', () => {
+      renderTrackNames()
+    })
+    Sequencer.on('trackInstrumentsLoaded', () => {
+      renderTrackNames()
+    })
   }
 
   /**
@@ -887,8 +1073,9 @@ const UI = (() => {
           const trackIndex = loopNumber - 1 // Convert loop1-8 to 0-7
           LoopPedal.playTrack(trackIndex, false) // false = one-shot, not looping
         } else {
-          // Preview drum sound
-          AudioEngine.playDrum(track.id)
+          // Preview drum sound - use assigned instrument instead of default
+          const assignedInstrument = Sequencer.getTrackInstrument(row)
+          AudioEngine.playDrum(assignedInstrument || track.id)
         }
       }
     }
@@ -1762,6 +1949,9 @@ const UI = (() => {
 
     // Re-render sequencer grid with new pattern
     renderSequencerGrid()
+
+    // Re-render track names to update mixer knobs with pattern's mixer settings
+    renderTrackNames()
   }
 
   /**
@@ -1793,14 +1983,178 @@ const UI = (() => {
     }
   }
 
+  // Track the currently editing track for instrument picker
+  let currentPickerTrackIndex = null
+
+  /**
+   * Show the instrument picker modal
+   * @param {number} trackIndex - Track index (0-15)
+   * @param {string} currentInstrumentId - Current instrument ID
+   */
+  const showInstrumentPicker = (trackIndex, currentInstrumentId) => {
+    currentPickerTrackIndex = trackIndex
+
+    // Get or create the modal element
+    let modal = document.getElementById('instrumentPickerModal')
+    if (!modal) {
+      modal = createInstrumentPickerModal()
+      document.body.appendChild(modal)
+    }
+
+    // Populate the modal with instrument categories
+    populateInstrumentPicker(currentInstrumentId)
+
+    // Show the modal
+    modal.classList.add('is-visible')
+    modal.setAttribute('aria-hidden', 'false')
+  }
+
+  /**
+   * Hide the instrument picker modal
+   */
+  const hideInstrumentPicker = () => {
+    const modal = document.getElementById('instrumentPickerModal')
+    if (modal) {
+      modal.classList.remove('is-visible')
+      modal.setAttribute('aria-hidden', 'true')
+    }
+    currentPickerTrackIndex = null
+  }
+
+  /**
+   * Create the instrument picker modal HTML
+   * @returns {HTMLElement} The modal element
+   */
+  const createInstrumentPickerModal = () => {
+    const modal = document.createElement('div')
+    modal.id = 'instrumentPickerModal'
+    modal.className = 'instrument-picker-modal'
+    modal.setAttribute('role', 'dialog')
+    modal.setAttribute('aria-label', 'Select Instrument')
+    modal.setAttribute('aria-hidden', 'true')
+
+    modal.innerHTML = `
+      <div class="instrument-picker-modal__backdrop"></div>
+      <div class="instrument-picker-modal__content">
+        <div class="instrument-picker-modal__header">
+          <h3>Select Instrument</h3>
+          <button class="instrument-picker-modal__close" aria-label="Close">&times;</button>
+        </div>
+        <div class="instrument-picker-modal__body">
+          <div class="instrument-picker-modal__categories" id="instrumentCategories"></div>
+        </div>
+      </div>
+    `
+
+    // Add event listeners
+    const backdrop = modal.querySelector('.instrument-picker-modal__backdrop')
+    const closeBtn = modal.querySelector('.instrument-picker-modal__close')
+
+    backdrop.addEventListener('click', hideInstrumentPicker)
+    closeBtn.addEventListener('click', hideInstrumentPicker)
+
+    // Close on escape key
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        hideInstrumentPicker()
+      }
+    })
+
+    return modal
+  }
+
+  /**
+   * Populate the instrument picker with categories and instruments
+   * @param {string} currentInstrumentId - Current instrument ID to highlight
+   */
+  const populateInstrumentPicker = (currentInstrumentId) => {
+    const categoriesContainer = document.getElementById('instrumentCategories')
+    if (!categoriesContainer) return
+
+    const library = AudioEngine.getInstrumentLibrary()
+    if (!library || !library.categories) return
+
+    categoriesContainer.innerHTML = ''
+
+    library.categories.forEach(category => {
+      const categoryDiv = document.createElement('div')
+      categoryDiv.className = 'instrument-picker__category'
+
+      const categoryHeader = document.createElement('div')
+      categoryHeader.className = 'instrument-picker__category-header'
+      categoryHeader.innerHTML = `
+        <span class="instrument-picker__category-name">${category.name}</span>
+        <span class="instrument-picker__category-toggle">▼</span>
+      `
+      categoryHeader.addEventListener('click', () => {
+        categoryDiv.classList.toggle('is-collapsed')
+      })
+
+      const instrumentList = document.createElement('div')
+      instrumentList.className = 'instrument-picker__instruments'
+
+      category.instruments.forEach(instrument => {
+        const instrumentItem = document.createElement('div')
+        instrumentItem.className = 'instrument-picker__instrument'
+        if (instrument.id === currentInstrumentId) {
+          instrumentItem.classList.add('is-selected')
+        }
+        instrumentItem.dataset.instrumentId = instrument.id
+
+        instrumentItem.innerHTML = `
+          <button class="instrument-picker__preview" title="Preview">▶</button>
+          <span class="instrument-picker__name">${instrument.name}</span>
+        `
+
+        // Preview button click
+        const previewBtn = instrumentItem.querySelector('.instrument-picker__preview')
+        previewBtn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          AudioEngine.previewInstrument(instrument.id)
+        })
+
+        // Select instrument on name click
+        instrumentItem.addEventListener('click', () => {
+          selectInstrument(instrument.id)
+        })
+
+        instrumentList.appendChild(instrumentItem)
+      })
+
+      categoryDiv.appendChild(categoryHeader)
+      categoryDiv.appendChild(instrumentList)
+      categoriesContainer.appendChild(categoryDiv)
+    })
+  }
+
+  /**
+   * Handle instrument selection from the picker
+   * @param {string} instrumentId - Selected instrument ID
+   */
+  const selectInstrument = (instrumentId) => {
+    if (currentPickerTrackIndex === null) return
+
+    // Update the sequencer's track instrument
+    Sequencer.setTrackInstrument(currentPickerTrackIndex, instrumentId)
+
+    // Re-render track names to show the new instrument name
+    renderTrackNames()
+
+    // Hide the modal
+    hideInstrumentPicker()
+  }
+
   // Public API
   return {
     init,
     renderSequencerGrid,
+    renderTrackNames,
     updateThemeColors,
     updateSongSections,
     updateLoopTrackDurations,
     updateEffectsUI,
-    updateChainModeUI
+    updateChainModeUI,
+    showInstrumentPicker,
+    hideInstrumentPicker
   }
 })()

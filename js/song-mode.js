@@ -122,6 +122,8 @@ const SongMode = (() => {
       stepCount: stepCount || Sequencer.getStepCount(),
       repeats: patternBank[index].repeats || 1, // Preserve repeat count
       loopTracks,
+      trackInstruments: Sequencer.getTrackInstruments(), // Save instrument assignments
+      drumMixerSettings: AudioEngine.exportMixerSettings(), // Save per-track mixer settings
       isEmpty: false
     }
 
@@ -308,6 +310,18 @@ const SongMode = (() => {
       // Restore step count
       if (slot.stepCount !== undefined) {
         Sequencer.setStepCount(slot.stepCount)
+      }
+
+      // Restore track instruments if available
+      if (slot.trackInstruments) {
+        slot.trackInstruments.forEach((instrumentId, trackIndex) => {
+          Sequencer.setTrackInstrument(trackIndex, instrumentId)
+        })
+      }
+
+      // Restore drum mixer settings if available
+      if (slot.drumMixerSettings) {
+        AudioEngine.importMixerSettings(slot.drumMixerSettings)
       }
     }
 
@@ -687,6 +701,8 @@ const SongMode = (() => {
         stepCount: slot.stepCount,
         repeats: slot.repeats,
         loopTracks: slot.loopTracks, // Pattern-specific loop tracks (already base64)
+        trackInstruments: slot.trackInstruments || null, // Per-pattern instrument assignments
+        drumMixerSettings: slot.drumMixerSettings || null, // Per-pattern mixer settings
         isEmpty: slot.isEmpty
       })),
       currentPatternIndex,
@@ -711,6 +727,8 @@ const SongMode = (() => {
       stepCount: slot.stepCount || 16,
       repeats: slot.repeats || 1,
       loopTracks: slot.loopTracks || null,
+      trackInstruments: slot.trackInstruments || null, // Per-pattern instrument assignments
+      drumMixerSettings: slot.drumMixerSettings || null, // Per-pattern mixer settings
       isEmpty: slot.isEmpty !== false ? true : false
     }))
 
@@ -734,6 +752,18 @@ const SongMode = (() => {
       // Restore step count
       if (currentSlot.stepCount !== undefined) {
         Sequencer.setStepCount(currentSlot.stepCount)
+      }
+
+      // Restore track instruments
+      if (currentSlot.trackInstruments) {
+        currentSlot.trackInstruments.forEach((instrumentId, trackIndex) => {
+          Sequencer.setTrackInstrument(trackIndex, instrumentId)
+        })
+      }
+
+      // Restore mixer settings
+      if (currentSlot.drumMixerSettings) {
+        AudioEngine.importMixerSettings(currentSlot.drumMixerSettings)
       }
 
       // Load pattern-specific loop tracks (4-7)
