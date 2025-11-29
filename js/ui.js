@@ -160,10 +160,18 @@ const UI = (() => {
 
     const knob = e.currentTarget
     const instrument = knob.dataset.instrument
+    const loopTrack = knob.dataset.loopTrack
 
     draggedKnob = knob
     dragStartY = e.clientY
-    dragStartVolume = AudioEngine.getTrackVolume(instrument)
+
+    // Get initial volume from appropriate source
+    if (loopTrack !== undefined) {
+      const trackInfo = LoopPedal.getTrackInfo(parseInt(loopTrack, 10))
+      dragStartVolume = trackInfo ? trackInfo.volume : 0.8
+    } else {
+      dragStartVolume = AudioEngine.getTrackVolume(instrument)
+    }
 
     document.addEventListener('mousemove', handleKnobMouseMove)
     document.addEventListener('mouseup', handleKnobMouseUp)
@@ -173,11 +181,21 @@ const UI = (() => {
     if (!draggedKnob) return
 
     const instrument = draggedKnob.dataset.instrument
+    const loopTrack = draggedKnob.dataset.loopTrack
     const deltaY = dragStartY - e.clientY  // Inverted: up = increase
     const volumeChange = deltaY / 100       // 100px = full range (0 to 1)
     const newVolume = Math.max(0, Math.min(1, dragStartVolume + volumeChange))
 
-    AudioEngine.setTrackVolume(instrument, newVolume)
+    if (loopTrack !== undefined) {
+      // Loop track - update LoopPedal and sync with sample recorder slider
+      const trackIndex = parseInt(loopTrack, 10)
+      LoopPedal.setTrackVolume(trackIndex, newVolume)
+      updateSampleRecorderVolumeSlider(trackIndex, newVolume)
+    } else {
+      // Drum track - update AudioEngine
+      AudioEngine.setTrackVolume(instrument, newVolume)
+    }
+
     updateKnobRotation(draggedKnob, newVolume)
   }
 
@@ -193,6 +211,42 @@ const UI = (() => {
     const indicator = knobContainer.querySelector('.volume-knob__indicator')
     if (indicator) {
       indicator.style.transform = `rotate(${rotation}deg)`
+    }
+  }
+
+  /**
+   * Update sample recorder volume slider to match sequencer knob
+   * @param {number} trackIndex - Loop track index (0-7)
+   * @param {number} volume - Volume value (0-1)
+   */
+  const updateSampleRecorderVolumeSlider = (trackIndex, volume) => {
+    if (!loopTracksContainer) return
+
+    const trackDiv = loopTracksContainer.querySelector(`.loop-track[data-track-index="${trackIndex}"]`)
+    if (trackDiv) {
+      const slider = trackDiv.querySelector('.track-volume')
+      const valueSpan = slider?.parentElement?.querySelector('.control__value')
+
+      if (slider) {
+        slider.value = Math.round(volume * 100)
+      }
+      if (valueSpan) {
+        valueSpan.textContent = `${Math.round(volume * 100)}%`
+      }
+    }
+  }
+
+  /**
+   * Update sequencer volume knob to match sample recorder slider
+   * @param {number} trackIndex - Loop track index (0-7)
+   * @param {number} volume - Volume value (0-1)
+   */
+  const updateSequencerVolumeKnob = (trackIndex, volume) => {
+    if (!trackNamesContainer) return
+
+    const knobContainer = trackNamesContainer.querySelector(`.volume-knob-container[data-loop-track="${trackIndex}"]`)
+    if (knobContainer) {
+      updateKnobRotation(knobContainer, volume)
     }
   }
 
@@ -221,31 +275,40 @@ const UI = (() => {
       label.textContent = track.name
       nameDiv.appendChild(label)
 
-      // Add volume knob for drum tracks (not loop tracks)
-      if (!track.id.startsWith('loop')) {
-        const knobContainer = document.createElement('div')
-        knobContainer.className = 'volume-knob-container'
-        knobContainer.dataset.instrument = track.id
+      // Add volume knob for all tracks (drum and loop)
+      const knobContainer = document.createElement('div')
+      knobContainer.className = 'volume-knob-container'
+      knobContainer.dataset.instrument = track.id
 
-        const volume = AudioEngine.getTrackVolume(track.id)
-        const rotation = -135 + (volume * 270) // -135° to +135° = 270° range
-
-        knobContainer.innerHTML = `
-          <svg class="volume-knob" viewBox="0 0 50 50">
-            <circle cx="25" cy="25" r="20" class="volume-knob__bg"/>
-            <line
-              x1="25"
-              y1="25"
-              x2="25"
-              y2="10"
-              class="volume-knob__indicator"
-              style="transform: rotate(${rotation}deg)"
-            />
-          </svg>
-        `
-
-        nameDiv.appendChild(knobContainer)
+      let volume
+      if (track.id.startsWith('loop')) {
+        // Loop track - get volume from LoopPedal
+        const trackIndex = parseInt(track.id.replace('loop', ''), 10) - 1
+        const trackInfo = LoopPedal.getTrackInfo(trackIndex)
+        volume = trackInfo ? trackInfo.volume : 0.8
+        knobContainer.dataset.loopTrack = trackIndex
+      } else {
+        // Drum track - get volume from AudioEngine
+        volume = AudioEngine.getTrackVolume(track.id)
       }
+
+      const rotation = -135 + (volume * 270) // -135° to +135° = 270° range
+
+      knobContainer.innerHTML = `
+        <svg class="volume-knob" viewBox="0 0 50 50">
+          <circle cx="25" cy="25" r="20" class="volume-knob__bg"/>
+          <line
+            x1="25"
+            y1="25"
+            x2="25"
+            y2="10"
+            class="volume-knob__indicator"
+            style="transform: rotate(${rotation}deg)"
+          />
+        </svg>
+      `
+
+      nameDiv.appendChild(knobContainer)
 
       trackNamesContainer.appendChild(nameDiv)
     })
@@ -744,6 +807,9 @@ const UI = (() => {
             if (valueSpan) {
               valueSpan.textContent = `${e.target.value}%`
             }
+
+            // Sync with sequencer volume knob
+            updateSequencerVolumeKnob(trackIndex, volume)
           }
         }
       })
