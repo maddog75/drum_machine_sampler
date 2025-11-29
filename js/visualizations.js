@@ -32,9 +32,22 @@ const Visualizations = (() => {
   const TYPES = {
     WAVEFORM: 'waveform',
     FREQUENCY: 'frequency',
-    OSCILLOSCOPE: 'oscilloscope',
-    SPECTRUM: 'spectrum',
-    METER: 'meter'
+    METER: 'meter',
+    KALEIDOSCOPE: 'kaleidoscope',
+    TUNNEL: 'tunnel'
+  }
+
+  // State for animated visualizations
+  const vizState = {
+    kaleidoscope: {
+      rotation: 0,
+      hueOffset: 0
+    },
+    tunnel: {
+      z: 0,
+      particles: [],
+      hueOffset: 0
+    }
   }
 
   /**
@@ -323,14 +336,14 @@ const Visualizations = (() => {
         case TYPES.FREQUENCY:
           renderFrequency(window)
           break
-        case TYPES.OSCILLOSCOPE:
-          renderOscilloscope(window)
-          break
-        case TYPES.SPECTRUM:
-          renderSpectrum(window)
-          break
         case TYPES.METER:
           renderMeter(window)
+          break
+        case TYPES.KALEIDOSCOPE:
+          renderKaleidoscope(window)
+          break
+        case TYPES.TUNNEL:
+          renderTunnel(window)
           break
       }
 
@@ -432,19 +445,242 @@ const Visualizations = (() => {
   }
 
   /**
-   * Render oscilloscope visualization
+   * Render kaleidoscope visualization
    * @param {Object} window - Window object
    */
-  const renderOscilloscope = (window) => {
-    renderWaveform(window) // Similar to waveform for now
+  const renderKaleidoscope = (window) => {
+    const ctx = window.context
+    const width = window.canvas.width
+    const height = window.canvas.height
+    const analyser = AudioEngine.getAnalyser()
+
+    if (!analyser) return
+
+    // Get frequency data for reactivity
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+    analyser.getByteFrequencyData(dataArray)
+
+    // Calculate audio intensity
+    const bass = dataArray.slice(0, 10).reduce((a, b) => a + b, 0) / 10 / 255
+    const mid = dataArray.slice(10, 100).reduce((a, b) => a + b, 0) / 90 / 255
+    const high = dataArray.slice(100, 200).reduce((a, b) => a + b, 0) / 100 / 255
+    const overall = (bass + mid + high) / 3
+
+    // Clear with fade effect for trails
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'
+    ctx.fillRect(0, 0, width, height)
+
+    const centerX = width / 2
+    const centerY = height / 2
+    const segments = 8 // Number of kaleidoscope segments
+    const maxRadius = Math.min(width, height) / 2
+
+    // Update rotation based on audio
+    vizState.kaleidoscope.rotation += 0.01 + bass * 0.05
+    vizState.kaleidoscope.hueOffset += 0.5 + overall * 2
+
+    ctx.save()
+    ctx.translate(centerX, centerY)
+
+    // Draw kaleidoscope segments
+    for (let seg = 0; seg < segments; seg++) {
+      ctx.save()
+      ctx.rotate((seg * Math.PI * 2) / segments + vizState.kaleidoscope.rotation)
+
+      // Draw shapes based on frequency data
+      for (let i = 0; i < 32; i++) {
+        const freqIndex = Math.floor((i / 32) * bufferLength * 0.5)
+        const amplitude = dataArray[freqIndex] / 255
+        const radius = 20 + i * 8 * window.options.zoom
+        const size = 5 + amplitude * 20 * window.options.zoom
+
+        if (radius > maxRadius) continue
+
+        const angle = (i * 0.2) + vizState.kaleidoscope.rotation * 0.5
+        const x = Math.cos(angle) * radius * (0.5 + amplitude * 0.5)
+        const y = Math.sin(angle) * radius * 0.3
+
+        const hue = (vizState.kaleidoscope.hueOffset + i * 10 + seg * 45) % 360
+        const lightness = 40 + amplitude * 30
+
+        ctx.beginPath()
+        ctx.fillStyle = `hsla(${hue}, 80%, ${lightness}%, ${0.3 + amplitude * 0.5})`
+
+        // Alternate between circles and polygons
+        if (i % 3 === 0) {
+          ctx.arc(x, y, size, 0, Math.PI * 2)
+        } else if (i % 3 === 1) {
+          // Triangle
+          ctx.moveTo(x, y - size)
+          ctx.lineTo(x - size * 0.866, y + size * 0.5)
+          ctx.lineTo(x + size * 0.866, y + size * 0.5)
+          ctx.closePath()
+        } else {
+          // Diamond
+          ctx.moveTo(x, y - size)
+          ctx.lineTo(x + size, y)
+          ctx.lineTo(x, y + size)
+          ctx.lineTo(x - size, y)
+          ctx.closePath()
+        }
+        ctx.fill()
+      }
+
+      // Mirror effect
+      ctx.scale(1, -1)
+      for (let i = 0; i < 16; i++) {
+        const freqIndex = Math.floor((i / 16) * bufferLength * 0.3)
+        const amplitude = dataArray[freqIndex] / 255
+        const radius = 30 + i * 12 * window.options.zoom
+        const size = 3 + amplitude * 15
+
+        if (radius > maxRadius) continue
+
+        const x = radius * (0.3 + amplitude * 0.4)
+        const y = i * 5
+
+        const hue = (vizState.kaleidoscope.hueOffset + i * 15 + seg * 45 + 180) % 360
+
+        ctx.beginPath()
+        ctx.fillStyle = `hsla(${hue}, 70%, 50%, ${0.2 + amplitude * 0.4})`
+        ctx.arc(x, y, size, 0, Math.PI * 2)
+        ctx.fill()
+      }
+
+      ctx.restore()
+    }
+
+    ctx.restore()
   }
 
   /**
-   * Render spectrum analyzer visualization
+   * Render tunnel/starfield visualization - flying through sound
    * @param {Object} window - Window object
    */
-  const renderSpectrum = (window) => {
-    renderFrequency(window) // Similar to frequency for now
+  const renderTunnel = (window) => {
+    const ctx = window.context
+    const width = window.canvas.width
+    const height = window.canvas.height
+    const analyser = AudioEngine.getAnalyser()
+
+    if (!analyser) return
+
+    // Get frequency data
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+    analyser.getByteFrequencyData(dataArray)
+
+    // Calculate audio intensity
+    const bass = dataArray.slice(0, 10).reduce((a, b) => a + b, 0) / 10 / 255
+    const mid = dataArray.slice(10, 100).reduce((a, b) => a + b, 0) / 90 / 255
+    const overall = (bass * 0.6 + mid * 0.4)
+
+    // Clear with motion blur effect
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'
+    ctx.fillRect(0, 0, width, height)
+
+    const centerX = width / 2
+    const centerY = height / 2
+
+    // Update tunnel state
+    vizState.tunnel.z += 2 + overall * 10
+    vizState.tunnel.hueOffset += 0.3 + bass * 2
+
+    // Initialize particles if empty
+    if (vizState.tunnel.particles.length < 150) {
+      for (let i = vizState.tunnel.particles.length; i < 150; i++) {
+        vizState.tunnel.particles.push({
+          x: (Math.random() - 0.5) * 2,
+          y: (Math.random() - 0.5) * 2,
+          z: Math.random() * 1000,
+          size: Math.random() * 2 + 1,
+          hue: Math.random() * 360
+        })
+      }
+    }
+
+    // Sort particles by z for proper depth rendering
+    vizState.tunnel.particles.sort((a, b) => b.z - a.z)
+
+    // Update and draw particles (stars flying past)
+    vizState.tunnel.particles.forEach((particle, index) => {
+      // Move particle toward viewer
+      particle.z -= 5 + overall * 20 * window.options.zoom
+
+      // Reset particle if it's passed the viewer
+      if (particle.z <= 0) {
+        particle.z = 1000
+        particle.x = (Math.random() - 0.5) * 2
+        particle.y = (Math.random() - 0.5) * 2
+        particle.hue = (vizState.tunnel.hueOffset + Math.random() * 60) % 360
+      }
+
+      // Calculate screen position with perspective
+      const perspective = 300 / particle.z
+      const screenX = centerX + particle.x * width * perspective
+      const screenY = centerY + particle.y * height * perspective
+      const size = particle.size * perspective * 10 * window.options.zoom
+
+      // Only draw if on screen
+      if (screenX >= 0 && screenX <= width && screenY >= 0 && screenY <= height) {
+        // Color based on depth and audio
+        const freqIndex = Math.floor((index / 150) * bufferLength * 0.5)
+        const amplitude = dataArray[freqIndex] / 255
+
+        const hue = (particle.hue + vizState.tunnel.hueOffset) % 360
+        const lightness = 50 + amplitude * 30
+        const alpha = Math.min(1, (1000 - particle.z) / 500) * (0.5 + amplitude * 0.5)
+
+        // Draw star with glow
+        ctx.beginPath()
+        ctx.fillStyle = `hsla(${hue}, 80%, ${lightness}%, ${alpha})`
+        ctx.arc(screenX, screenY, size, 0, Math.PI * 2)
+        ctx.fill()
+
+        // Draw motion trail
+        if (size > 2) {
+          const trailLength = size * 3 * (1 + overall)
+          const gradient = ctx.createLinearGradient(
+            screenX, screenY,
+            screenX - (screenX - centerX) * 0.1,
+            screenY - (screenY - centerY) * 0.1
+          )
+          gradient.addColorStop(0, `hsla(${hue}, 80%, ${lightness}%, ${alpha * 0.8})`)
+          gradient.addColorStop(1, `hsla(${hue}, 80%, ${lightness}%, 0)`)
+
+          ctx.beginPath()
+          ctx.strokeStyle = gradient
+          ctx.lineWidth = size * 0.5
+          ctx.moveTo(screenX, screenY)
+          ctx.lineTo(
+            screenX - (screenX - centerX) * trailLength / 100,
+            screenY - (screenY - centerY) * trailLength / 100
+          )
+          ctx.stroke()
+        }
+      }
+    })
+
+    // Draw tunnel rings based on frequency
+    for (let i = 0; i < 8; i++) {
+      const freqIndex = Math.floor((i / 8) * bufferLength * 0.3)
+      const amplitude = dataArray[freqIndex] / 255
+      const ringZ = ((vizState.tunnel.z * 2 + i * 125) % 1000)
+      const perspective = 300 / Math.max(ringZ, 1)
+      const radius = 400 * perspective * (1 + amplitude * 0.5)
+
+      if (radius > 5 && radius < Math.max(width, height)) {
+        const hue = (vizState.tunnel.hueOffset + i * 45) % 360
+        const alpha = Math.min(0.6, (1000 - ringZ) / 1000) * amplitude
+
+        ctx.beginPath()
+        ctx.strokeStyle = `hsla(${hue}, 70%, 60%, ${alpha})`
+        ctx.lineWidth = 2 + amplitude * 4
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+    }
   }
 
   /**
@@ -559,9 +795,9 @@ const Visualizations = (() => {
     const titles = {
       [TYPES.WAVEFORM]: 'Waveform',
       [TYPES.FREQUENCY]: 'Frequency Spectrum',
-      [TYPES.OSCILLOSCOPE]: 'Oscilloscope',
-      [TYPES.SPECTRUM]: 'Spectrum Analyzer',
-      [TYPES.METER]: 'VU Meter'
+      [TYPES.METER]: 'VU Meter',
+      [TYPES.KALEIDOSCOPE]: 'Kaleidoscope',
+      [TYPES.TUNNEL]: 'Starfield Tunnel'
     }
     return titles[type] || 'Visualization'
   }

@@ -627,16 +627,16 @@ const UI = (() => {
     // Visualization window buttons
     const openWaveformBtn = document.getElementById('openWaveformBtn')
     const openFrequencyBtn = document.getElementById('openFrequencyBtn')
-    const openOscilloscopeBtn = document.getElementById('openOscilloscopeBtn')
-    const openSpectrumBtn = document.getElementById('openSpectrumBtn')
     const openMeterBtn = document.getElementById('openMeterBtn')
+    const openKaleidoscopeBtn = document.getElementById('openKaleidoscopeBtn')
+    const openTunnelBtn = document.getElementById('openTunnelBtn')
     const closeAllVizBtn = document.getElementById('closeAllVizBtn')
 
     if (openWaveformBtn) openWaveformBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.WAVEFORM))
     if (openFrequencyBtn) openFrequencyBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.FREQUENCY))
-    if (openOscilloscopeBtn) openOscilloscopeBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.OSCILLOSCOPE))
-    if (openSpectrumBtn) openSpectrumBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.SPECTRUM))
     if (openMeterBtn) openMeterBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.METER))
+    if (openKaleidoscopeBtn) openKaleidoscopeBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.KALEIDOSCOPE))
+    if (openTunnelBtn) openTunnelBtn.addEventListener('click', () => Visualizations.createWindow(Visualizations.TYPES.TUNNEL))
     if (closeAllVizBtn) closeAllVizBtn.addEventListener('click', () => Visualizations.closeAll())
 
     // Effects button
