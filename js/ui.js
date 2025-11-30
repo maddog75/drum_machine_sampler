@@ -244,9 +244,17 @@ const UI = (() => {
   const updateSequencerVolumeKnob = (trackIndex, volume) => {
     if (!trackNamesContainer) return
 
-    const knobContainer = trackNamesContainer.querySelector(`.volume-knob-container[data-loop-track="${trackIndex}"]`)
+    // Find the mixer knob for this loop track's volume parameter
+    const knobContainer = trackNamesContainer.querySelector(`.mixer-knob[data-loop-track="${trackIndex}"][data-param="volume"]`)
     if (knobContainer) {
-      updateKnobRotation(knobContainer, volume)
+      // Update rotation using mixer knob rotation logic
+      const rotation = -135 + (volume * 270)
+      const indicator = knobContainer.querySelector('.mixer-knob__indicator')
+      if (indicator) {
+        indicator.style.transform = `rotate(${rotation}deg)`
+      }
+      // Update tooltip
+      knobContainer.title = `Vol: ${Math.round(volume * 100)}%`
     }
   }
 

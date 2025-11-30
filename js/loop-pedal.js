@@ -57,6 +57,7 @@ const LoopPedal = (() => {
         pitch: 0,           // -12 to +12 semitones
         attack: 0,          // 0-100 ms
         decay: 100,         // 0-100% of sample length
+        length: 2,          // 0-2 seconds max playback length
         bass: 0,            // -12 to +12 dB at 100Hz
         treble: 0           // -12 to +12 dB at 10kHz
       }
@@ -212,9 +213,12 @@ const LoopPedal = (() => {
         this.gainNode.gain.value = this.muted ? 0 : this.volume
       }
 
-      // Calculate adjusted duration for decay
-      const adjustedDuration = (this.audioBuffer.duration - this.startTrim) / this.source.playbackRate.value
+      // Calculate adjusted duration for decay and length
+      const rawDuration = (this.audioBuffer.duration - this.startTrim) / this.source.playbackRate.value
+      const maxLength = this.mixerSettings.length ?? 2
+      const adjustedDuration = Math.min(rawDuration, maxLength)
       const decayPercent = (this.mixerSettings.decay ?? 100) / 100
+      const playDuration = adjustedDuration * decayPercent
 
       // Handle one-shot playback
       if (!loop) {
@@ -226,9 +230,9 @@ const LoopPedal = (() => {
 
       this.source.start(effectiveStartTime, this.startTrim)  // Apply start trim offset
 
-      // Stop early if decay is less than 100% (only for one-shot mode)
-      if (decayPercent < 1 && !loop) {
-        this.source.stop(effectiveStartTime + (adjustedDuration * decayPercent))
+      // Stop early if length or decay limits playback (only for one-shot mode)
+      if (!loop && playDuration < rawDuration) {
+        this.source.stop(effectiveStartTime + playDuration)
       }
 
       this.isPlaying = loop // Only mark as playing if looping
